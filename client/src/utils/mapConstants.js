@@ -3,15 +3,85 @@
  * Base Demo Location: IDEA Lab Smart Urban Facility Center [19.0760, 72.8777] (Configurable)
  */
 
-export const PARKING_FACILITY_LOCATION = {
-  lat: 19.0760,
-  lng: 72.8777,
-  name: 'IDEA Lab Smart Urban Parking Facility',
-  address: 'Central Technology Corridor, Smart City District',
-  city: 'Mumbai, MH',
-  capacity: 30,
-  evFastChargers: 6
-};
+export const PARKING_LOCATIONS = [
+  {
+    id: 'idea-lab-hub',
+    name: 'IDEA Lab Smart Urban Parking Facility',
+    shortName: 'IDEA Lab Central',
+    lat: 19.0760,
+    lng: 72.8777,
+    address: 'Central Technology Corridor, Smart City District',
+    city: 'Mumbai, MH',
+    capacity: 30,
+    evFastChargers: 6,
+    chargerType: '50kW DC Fast',
+    pricePerHour: '₹40/hr',
+    status: 'ACTIVE',
+    badge: 'Flagship Hub'
+  },
+  {
+    id: 'csmt-station-hub',
+    name: 'CSMT Station Metro & Railway Hub',
+    shortName: 'CSMT Terminal P1',
+    lat: 18.9400,
+    lng: 72.8353,
+    address: 'Fort Commercial Core, South District',
+    city: 'Mumbai, MH',
+    capacity: 45,
+    evFastChargers: 10,
+    chargerType: '100kW Ultra-Fast',
+    pricePerHour: '₹60/hr',
+    status: 'ACTIVE',
+    badge: 'High-Demand'
+  },
+  {
+    id: 'bkc-finance-hub',
+    name: 'BKC Financial Center Complex',
+    shortName: 'BKC Tower Deck',
+    lat: 19.0657,
+    lng: 72.8686,
+    address: 'G-Block, Bandra Kurla Complex',
+    city: 'Mumbai, MH',
+    capacity: 60,
+    evFastChargers: 14,
+    chargerType: '150kW Hyper-Charge',
+    pricePerHour: '₹80/hr',
+    status: 'ACTIVE',
+    badge: 'Priority Fleet'
+  },
+  {
+    id: 'airport-north-hub',
+    name: 'Airport North Terminal P4 Complex',
+    shortName: 'Chhatrapati Shivaji Intl P4',
+    lat: 19.0968,
+    lng: 72.8530,
+    address: 'Vile Parle East, Airport Corridor',
+    city: 'Mumbai, MH',
+    capacity: 50,
+    evFastChargers: 12,
+    chargerType: '100kW Fast',
+    pricePerHour: '₹100/hr',
+    status: 'ACTIVE',
+    badge: 'Transit Hub'
+  },
+  {
+    id: 'powai-tech-hub',
+    name: 'Powai Tech Park & Innovation Hub',
+    shortName: 'Powai Silicon Plaza',
+    lat: 19.1176,
+    lng: 72.9060,
+    address: 'Hiranandani Business Park, Powai',
+    city: 'Mumbai, MH',
+    capacity: 40,
+    evFastChargers: 8,
+    chargerType: '50kW DC Fast',
+    pricePerHour: '₹50/hr',
+    status: 'ACTIVE',
+    badge: 'Solar Canopy'
+  }
+];
+
+export const PARKING_FACILITY_LOCATION = PARKING_LOCATIONS[0];
 
 export const DEFAULT_MAP_CENTER = [PARKING_FACILITY_LOCATION.lat, PARKING_FACILITY_LOCATION.lng];
 export const DEFAULT_MAP_ZOOM = 19;

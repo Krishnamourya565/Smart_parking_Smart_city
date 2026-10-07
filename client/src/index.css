@@ -147,6 +147,21 @@
 .leaflet-container {
   background-color: #070B14 !important;
   font-family: 'Plus Jakarta Sans', sans-serif !important;
+  z-index: 1 !important;
+  position: relative !important;
+}
+
+.leaflet-pane {
+  z-index: 10 !important;
+}
+
+.leaflet-popup {
+  z-index: 20 !important;
+}
+
+.leaflet-top,
+.leaflet-bottom {
+  z-index: 25 !important;
 }
 
 /* Dark Custom Popups */
