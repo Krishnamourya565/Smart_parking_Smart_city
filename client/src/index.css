@@ -1,0 +1,199 @@
+@import 'leaflet/dist/leaflet.css';
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-[#070B14] text-slate-100;
+  }
+}
+
+/* Custom glow effects for EV & Regular Spot Indicators */
+.glow-ev-free {
+  box-shadow: 0 0 15px rgba(6, 182, 212, 0.4), inset 0 0 10px rgba(6, 182, 212, 0.2);
+}
+
+.glow-ev-occupied {
+  box-shadow: 0 0 15px rgba(239, 68, 68, 0.4), inset 0 0 10px rgba(239, 68, 68, 0.2);
+}
+
+.glow-ev-reserved {
+  box-shadow: 0 0 15px rgba(245, 158, 11, 0.4), inset 0 0 10px rgba(245, 158, 11, 0.2);
+}
+
+.glow-reg-free {
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.35), inset 0 0 8px rgba(16, 185, 129, 0.15);
+}
+
+.glow-reg-occupied {
+  box-shadow: 0 0 8px rgba(100, 116, 139, 0.2);
+}
+
+/* High-tech glassmorphism card */
+.glass-panel {
+  background: rgba(11, 17, 32, 0.75);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(51, 65, 85, 0.5);
+}
+
+.glass-panel-glow {
+  background: rgba(11, 17, 32, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(6, 182, 212, 0.3);
+  box-shadow: 0 0 30px rgba(6, 182, 212, 0.15);
+}
+
+/* 3D Isometric View Container */
+.perspective-container {
+  perspective: 1000px;
+}
+
+.isometric-grid {
+  transform: rotateX(55deg) rotateZ(-35deg);
+  transform-style: preserve-3d;
+  transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.isometric-grid:hover {
+  transform: rotateX(50deg) rotateZ(-30deg);
+}
+
+.ortho-grid {
+  transform: rotateX(0deg) rotateZ(0deg);
+  transform-style: preserve-3d;
+  transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Energy Particle Flow Animations */
+@keyframes energyPulse {
+  0% { transform: translateY(0) scale(1); opacity: 0.8; }
+  50% { transform: translateY(-8px) scale(1.15); opacity: 1; filter: drop-shadow(0 0 10px #06B6D4); }
+  100% { transform: translateY(0) scale(1); opacity: 0.8; }
+}
+
+@keyframes particleFlow {
+  0% { transform: translateX(0) scale(0.6); opacity: 0; }
+  30% { opacity: 1; }
+  80% { opacity: 0.9; }
+  100% { transform: translateX(180px) scale(1.2); opacity: 0; }
+}
+
+@keyframes floatHUD {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+@keyframes roadGlow {
+  0% { stroke-dashoffset: 400; }
+  100% { stroke-dashoffset: 0; }
+}
+
+@keyframes laserSweep {
+  0% { transform: translateY(-100%); opacity: 0; }
+  50% { opacity: 0.5; }
+  100% { transform: translateY(200%); opacity: 0; }
+}
+
+.animate-energy-pulse {
+  animation: energyPulse 2s ease-in-out infinite;
+}
+
+.animate-particle-flow {
+  animation: particleFlow 2.2s linear infinite;
+}
+
+.animate-float-hud {
+  animation: floatHUD 3.5s ease-in-out infinite;
+}
+
+.animate-road-glow {
+  stroke-dasharray: 20 10;
+  animation: roadGlow 4s linear infinite;
+}
+
+.animate-laser {
+  animation: laserSweep 3s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0B0F19;
+}
+::-webkit-scrollbar-thumb {
+  background: #1F2937;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #374151;
+}
+
+/* ============================================================= */
+/* LEAFLET MAP & CYBER DARK THEME STYLING */
+/* ============================================================= */
+
+/* Cyber Dark Map Tiles Filter */
+.dark-osm-tiles .leaflet-tile {
+  filter: brightness(0.6) invert(1) contrast(3) hue-rotate(200deg) saturate(0.3) brightness(0.7);
+  -webkit-filter: brightness(0.6) invert(1) contrast(3) hue-rotate(200deg) saturate(0.3) brightness(0.7);
+}
+
+.leaflet-container {
+  background-color: #070B14 !important;
+  font-family: 'Plus Jakarta Sans', sans-serif !important;
+}
+
+/* Dark Custom Popups */
+.leaflet-popup-content-wrapper {
+  background: #0B1120 !important;
+  color: #E2E8F0 !important;
+  border: 1px solid #1E293B !important;
+  border-radius: 1rem !important;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5) !important;
+  padding: 0 !important;
+}
+
+.leaflet-popup-content {
+  margin: 0 !important;
+  line-height: 1.4 !important;
+}
+
+.leaflet-popup-tip {
+  background: #0B1120 !important;
+  border: 1px solid #1E293B !important;
+}
+
+.leaflet-popup-close-button {
+  color: #94A3B8 !important;
+  padding: 8px 8px 0 0 !important;
+}
+
+.leaflet-popup-close-button:hover {
+  color: #FFFFFF !important;
+}
+
+/* Custom Marker Pins */
+.custom-spot-marker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s ease, filter 0.2s ease;
+}
+
+.custom-spot-marker:hover {
+  transform: scale(1.15);
+  z-index: 9999 !important;
+}
+
+/* Animated Vehicle Marker on Polyline */
+.animated-car-marker {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  filter: drop-shadow(0 0 10px #06B6D4);
+}
+

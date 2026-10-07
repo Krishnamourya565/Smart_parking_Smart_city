@@ -1,0 +1,22 @@
+{
+  "name": "smart-parking-system",
+  "version": "1.0.0",
+  "description": "Organized Urban Systems: Software-Driven Smart Parking & Priority EV Allocation",
+  "scripts": {
+    "dev": "npm --prefix server start & npm --prefix client run dev",
+    "install-all": "npm --prefix server install && npm --prefix client install",
+    "server": "npm --prefix server start",
+    "client": "npm --prefix client run dev",
+    "simulate": "python simulation/smart_parking_simulation.py",
+    "build": "npm --prefix client run build"
+  },
+  "keywords": [
+    "smart-parking",
+    "ev-allocation",
+    "urban-optimization",
+    "idea-lab",
+    "computer-engineering"
+  ],
+  "author": "[Student Name]",
+  "license": "MIT"
+}
