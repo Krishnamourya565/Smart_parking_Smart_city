@@ -647,6 +647,10 @@ app.post('/api/reset', (req, res) => {
   });
 });
 
-app.listen(PORT, () => {
-  console.log(`[Smart Parking API] Running on http://localhost:${PORT}`);
-});
+if (process.env.NODE_ENV !== 'production') {
+  app.listen(PORT, () => {
+    console.log(`[Smart Parking API] Running on http://localhost:${PORT}`);
+  });
+}
+
+module.exports = app;
