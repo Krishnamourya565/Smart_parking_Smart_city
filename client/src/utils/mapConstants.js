@@ -6,8 +6,8 @@
 export const PARKING_LOCATIONS = [
   {
     id: 'idea-lab-hub',
-    name: 'IDEA Lab Smart Urban Parking Facility',
-    shortName: 'IDEA Lab Central',
+    name: 'Smart City Central Parking Hub',
+    shortName: 'Central Smart Hub',
     lat: 19.0760,
     lng: 72.8777,
     address: 'Central Technology Corridor, Smart City District',

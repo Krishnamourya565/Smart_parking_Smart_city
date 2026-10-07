@@ -152,6 +152,38 @@ export default function ParkingMap({
     }
   }, [isFullscreen, selectedLocation]);
 
+  // Global handler for Leaflet Popup Button clicks
+  useEffect(() => {
+    window.handleSelectLocationFromMapPopup = (locationId) => {
+      const loc = PARKING_LOCATIONS.find(l => l.id === locationId);
+      if (loc) {
+        handleSelectLocation(loc);
+        if (mapInstanceRef.current) {
+          mapInstanceRef.current.closePopup();
+        }
+        setTimeout(() => {
+          scrollToParkingSystem();
+        }, 300);
+      }
+    };
+    return () => {
+      delete window.handleSelectLocationFromMapPopup;
+    };
+  }, []);
+
+  // Handle Location Switching
+  const handleSelectLocation = (loc) => {
+    setSelectedLocation(loc);
+    setSelectedSpot(null);
+    if (mapInstanceRef.current) {
+      mapInstanceRef.current.flyTo([loc.lat, loc.lng], 16, {
+        duration: 1.2
+      });
+    }
+    setLocationStatus(`Switched view to ${loc.name}`);
+    setTimeout(() => setLocationStatus(''), 3000);
+  };
+
   // Render/Update Leaflet Markers for ALL Multiple Locations
   useEffect(() => {
     const map = mapInstanceRef.current;
@@ -200,9 +232,6 @@ export default function ParkingMap({
       const marker = L.marker([loc.lat, loc.lng], { icon: facilityIcon }).addTo(map);
 
       // Facility Popup HTML
-      const isCurrentActiveLot = loc.id === selectedLocation.id;
-      const liveAvailable = isCurrentActiveLot ? freeSpotsCount : Math.floor(loc.capacity * 0.65);
-
       const popupHtml = `
         <div class="p-3.5 space-y-2.5 min-w-[240px]">
           <div class="flex items-center justify-between border-b border-slate-800 pb-2">
@@ -234,8 +263,9 @@ export default function ParkingMap({
           </div>
 
           <button 
-            id="btn-select-location-${loc.id}"
-            class="w-full py-2 px-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 text-white font-extrabold rounded-xl text-xs flex items-center justify-center gap-1 shadow-lg shadow-cyan-500/20 transition-all cursor-pointer"
+            type="button"
+            onclick="window.handleSelectLocationFromMapPopup('${loc.id}')"
+            class="w-full py-2.5 px-3 bg-gradient-to-r from-cyan-500 via-teal-500 to-blue-600 hover:from-cyan-400 text-white font-extrabold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-lg shadow-cyan-500/25 transition-all cursor-pointer"
           >
             <span>Select & View Lot Grid</span>
             <span>&rarr;</span>
@@ -245,32 +275,14 @@ export default function ParkingMap({
 
       marker.bindPopup(popupHtml);
 
-      marker.on('popupopen', () => {
-        const btn = document.getElementById(`btn-select-location-${loc.id}`);
-        if (btn) {
-          btn.onclick = () => {
-            marker.closePopup();
-            handleSelectLocation(loc);
-          };
-        }
+      // On Marker Click: switch location & scroll to grid
+      marker.on('click', () => {
+        handleSelectLocation(loc);
       });
 
       locationMarkersRef.current[loc.id] = marker;
     });
   }, [selectedLocation, freeSpotsCount]);
-
-  // Handle Location Switching
-  const handleSelectLocation = (loc) => {
-    setSelectedLocation(loc);
-    setSelectedSpot(null);
-    if (mapInstanceRef.current) {
-      mapInstanceRef.current.flyTo([loc.lat, loc.lng], 16, {
-        duration: 1.2
-      });
-    }
-    setLocationStatus(`Switched map center to ${loc.name}`);
-    setTimeout(() => setLocationStatus(''), 3000);
-  };
 
   // -------------------------------------------------------------
   // 3. SEARCH BEHAVIOR
