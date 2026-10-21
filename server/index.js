@@ -106,7 +106,7 @@ app.get('/api/users/active', (req, res) => {
 // -------------------------------------------------------------
 
 // POST /api/auth/login — Universal login for Customer (Driver) and Admin
-app.post('/api/auth/login', (req, res) => {
+app.post('/api/auth/login', async (req, res) => {
   const { identifier, password, role = 'customer' } = req.body;
 
   if (role === 'admin' || identifier === 'admin' || identifier === 'admin@smartparking.org') {
@@ -134,10 +134,58 @@ app.post('/api/auth/login', (req, res) => {
 
   // Customer Login
   if (!identifier) {
-    return res.status(400).json({ success: false, message: 'Please provide your email, vehicle plate, or name.' });
+    return res.status(400).json({ success: false, message: 'Please provide your email, vehicle plate, or phone number.' });
   }
 
-  const result = state.authenticateCustomer(identifier, password || 'password123');
+  let result = state.authenticateCustomer(identifier, password || 'password123');
+
+  // If not found in in-memory state (e.g. serverless cold start), query Supabase!
+  if (!result.success && supabase) {
+    try {
+      const cleanIdent = String(identifier).trim();
+      const cleanLower = cleanIdent.toLowerCase();
+      const cleanUpper = cleanIdent.toUpperCase();
+      const cleanDigits = cleanIdent.replace(/\D/g, '');
+
+      const { data: dbCustomers, error } = await supabase
+        .from('customers')
+        .select('*');
+
+      if (!error && dbCustomers && dbCustomers.length > 0) {
+        const found = dbCustomers.find(c => 
+          (c.email && c.email.toLowerCase() === cleanLower) ||
+          (c.vehicle_plate && c.vehicle_plate.toUpperCase() === cleanUpper) ||
+          (c.name && c.name.toLowerCase() === cleanLower) ||
+          (cleanDigits.length >= 10 && c.phone && c.phone.replace(/\D/g, '').endsWith(cleanDigits.slice(-10)))
+        );
+
+        if (found) {
+          const mappedCustomer = {
+            id: found.id,
+            name: found.name,
+            email: found.email,
+            phone: found.phone || '',
+            password: found.password || 'password123',
+            vehiclePlate: found.vehicle_plate,
+            vehicleType: found.vehicle_type || 'EV',
+            batteryLevel: found.battery_level !== null ? Number(found.battery_level) : 50,
+            status: found.status || 'active',
+            totalSessions: found.total_sessions || found.total_bookings || 0,
+            totalSpent: Number(found.total_spent || 0)
+          };
+
+          if (!state.customers.some(c => c.id === mappedCustomer.id)) {
+            state.customers.push(mappedCustomer);
+          }
+
+          result = state.authenticateCustomer(identifier, password || 'password123');
+        }
+      }
+    } catch (e) {
+      console.warn('Supabase customer login lookup error:', e);
+    }
+  }
+
   if (result.success) {
     return res.json({
       success: true,
@@ -155,7 +203,7 @@ app.post('/api/auth/login', (req, res) => {
 });
 
 // POST /api/auth/register — Customer Sign Up / Registration
-app.post('/api/auth/register', (req, res) => {
+app.post('/api/auth/register', async (req, res) => {
   const { name, email, phone, password, vehiclePlate, vehicleType, batteryLevel } = req.body;
 
   if (!email || !name || !vehiclePlate) {
@@ -177,7 +225,13 @@ app.post('/api/auth/register', (req, res) => {
   });
 
   if (result.success) {
-    syncCustomerToSupabase(result.customer);
+    if (supabase) {
+      try {
+        await syncCustomerToSupabase(result.customer);
+      } catch (err) {
+        console.warn('Failed to sync registered customer to Supabase:', err);
+      }
+    }
     return res.json({
       success: true,
       message: 'Customer account registered and logged in successfully.',
@@ -211,7 +265,30 @@ app.post('/api/auth/logout', (req, res) => {
 // -------------------------------------------------------------
 
 // GET /api/admin/customers — List all registered customers + summary metrics
-app.get('/api/admin/customers', (req, res) => {
+app.get('/api/admin/customers', async (req, res) => {
+  if (supabase && state.customers.length === 0) {
+    try {
+      const { data: dbCustomers, error } = await supabase.from('customers').select('*');
+      if (!error && dbCustomers && dbCustomers.length > 0) {
+        state.customers = dbCustomers.map(found => ({
+          id: found.id,
+          name: found.name,
+          email: found.email,
+          phone: found.phone || '',
+          password: found.password || 'password123',
+          vehiclePlate: found.vehicle_plate,
+          vehicleType: found.vehicle_type || 'EV',
+          batteryLevel: found.battery_level !== null ? Number(found.battery_level) : 50,
+          status: found.status || 'active',
+          totalSessions: found.total_sessions || found.total_bookings || 0,
+          totalSpent: Number(found.total_spent || 0)
+        }));
+      }
+    } catch (e) {
+      console.warn('Admin customers Supabase fetch error:', e);
+    }
+  }
+
   const customers = state.getCustomers();
   const totalEVs = customers.filter(c => c.vehicleType === 'EV').length;
   const totalICE = customers.filter(c => c.vehicleType === 'Non-EV').length;

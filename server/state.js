@@ -148,10 +148,12 @@ class SystemState {
 
   getCustomerByEmailOrPlate(identifier) {
     const clean = String(identifier).trim().toLowerCase();
+    const cleanDigits = String(identifier).replace(/\D/g, '');
     return this.customers.find(c => 
       c.email.toLowerCase() === clean || 
       c.vehiclePlate.toLowerCase() === clean ||
-      c.name.toLowerCase() === clean
+      c.name.toLowerCase() === clean ||
+      (cleanDigits.length >= 10 && c.phone && c.phone.replace(/\D/g, '').endsWith(cleanDigits.slice(-10)))
     );
   }
 
@@ -161,12 +163,12 @@ class SystemState {
       return { success: false, message: 'A customer with this email or vehicle plate is already registered.' };
     }
 
-    const id = `CUST-${1000 + this.customers.length + 1}`;
+    const id = data.id || ('CUST-' + Math.floor(1000 + Math.random() * 9000) + '-' + Date.now().toString().slice(-4));
     const newCustomer = {
       id,
       name: data.name || 'New Driver',
       email: data.email,
-      phone: data.phone || '+1 (555) 000-0000',
+      phone: data.phone || '+91 00000 00000',
       password: data.password || 'password123',
       vehiclePlate: (data.vehiclePlate || `VEH-${Math.floor(100 + Math.random() * 900)}`).toUpperCase(),
       vehicleType: data.vehicleType || 'EV',
@@ -220,7 +222,9 @@ class SystemState {
       return { success: false, message: 'This customer account has been suspended by system administrator.' };
     }
 
-    if (customer.password && customer.password !== password && password !== 'admin123' && password !== 'password123') {
+    const trimmedInputPw = String(password || '').trim();
+    const customerPw = String(customer.password || 'password123').trim();
+    if (customer.password && customerPw !== trimmedInputPw && password !== customer.password && trimmedInputPw !== 'admin123' && trimmedInputPw !== 'password123') {
       this.recordLoginLog({
         userId: customer.id,
         userName: customer.name,

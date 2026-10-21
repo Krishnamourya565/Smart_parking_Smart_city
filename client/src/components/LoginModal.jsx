@@ -19,7 +19,9 @@ import {
   LogIn,
   KeyRound,
   Sparkles,
-  X
+  X,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { calculateChargingEstimate } from '../utils/constants';
 
@@ -45,6 +47,7 @@ export default function LoginModal({
   // Customer Login Form State
   const [customerIdentifier, setCustomerIdentifier] = useState('');
   const [customerPassword, setCustomerPassword] = useState('');
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
 
   // Customer Register Form State
   const [regName, setRegName] = useState('');
@@ -53,12 +56,16 @@ export default function LoginModal({
   const [regPlate, setRegPlate] = useState('');
   const [regType, setRegType] = useState('EV');
   const [regBattery, setRegBattery] = useState(18);
-  const [regPassword, setRegPassword] = useState('password123');
+  const [regPassword, setRegPassword] = useState('');
+  const [showRegPassword, setShowRegPassword] = useState(false);
 
   // Admin Form State
   const [adminPasscode, setAdminPasscode] = useState('admin123');
+  const [showAdminPassword, setShowAdminPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  if (!isOpen) return null;
 
   const handleCustomerLoginSubmit = async (e) => {
     e.preventDefault();
@@ -69,7 +76,7 @@ export default function LoginModal({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          identifier: customerIdentifier,
+          identifier: customerIdentifier.trim(),
           password: customerPassword,
           role: 'customer'
         })
@@ -90,16 +97,24 @@ export default function LoginModal({
   const handleCustomerRegisterSubmit = async (e) => {
     e.preventDefault();
     setErrorMessage('');
+
+    // Strict Indian Phone Validation: exactly 10 digits
+    const cleanPhoneDigits = regPhone.replace(/\D/g, '');
+    if (cleanPhoneDigits.length !== 10) {
+      setErrorMessage('Please enter a valid 10-digit Indian phone number (+91).');
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const res = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: regName,
-          email: regEmail,
-          phone: regPhone,
-          vehiclePlate: regPlate,
+          name: regName.trim(),
+          email: regEmail.trim(),
+          phone: `+91 ${cleanPhoneDigits}`,
+          vehiclePlate: regPlate.trim().toUpperCase(),
           vehicleType: regType,
           batteryLevel: regType === 'EV' ? regBattery : null,
           password: regPassword
@@ -302,13 +317,22 @@ export default function LoginModal({
                     <Lock className="w-4 h-4" />
                   </div>
                   <input
-                    type="password"
+                    type={showLoginPassword ? 'text' : 'password'}
                     required
                     value={customerPassword}
                     onChange={(e) => setCustomerPassword(e.target.value)}
                     placeholder="Enter password (default: password123)"
-                    className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-500 font-mono"
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-10 pr-10 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-500 font-mono"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowLoginPassword(!showLoginPassword)}
+                    className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-cyan-400 transition-colors cursor-pointer"
+                    title={showLoginPassword ? "Hide password" : "Show password"}
+                    aria-label="Toggle password visibility"
+                  >
+                    {showLoginPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
                 </div>
                 <div className="text-[11px] text-slate-500 mt-1">
                   Default Demo Password: <code className="text-cyan-400 bg-slate-900 px-1 py-0.5 rounded">password123</code>
@@ -366,14 +390,30 @@ export default function LoginModal({
                   />
                 </div>
                 <div>
-                  <label className="block text-slate-400 font-semibold mb-1">Phone Number</label>
-                  <input
-                    type="text"
-                    value={regPhone}
-                    onChange={(e) => setRegPhone(e.target.value)}
-                    placeholder="+1 (555) 019-2834"
-                    className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-white focus:outline-none focus:border-cyan-500"
-                  />
+                  <label className="block text-slate-400 font-semibold mb-1">
+                    Phone Number <span className="text-[10px] text-cyan-400 font-mono font-normal">(India +91)</span>
+                  </label>
+                  <div className="flex">
+                    <div className="flex items-center px-2.5 bg-slate-800/90 border border-r-0 border-slate-700/80 rounded-l-xl text-slate-300 font-mono font-bold text-xs select-none">
+                      🇮🇳 +91
+                    </div>
+                    <input
+                      type="tel"
+                      inputMode="numeric"
+                      required
+                      maxLength={10}
+                      value={regPhone}
+                      onChange={(e) => {
+                        const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
+                        setRegPhone(digits);
+                      }}
+                      placeholder="9876543210"
+                      className="w-full bg-slate-900 border border-slate-800 rounded-r-xl p-2.5 text-white font-mono focus:outline-none focus:border-cyan-500"
+                    />
+                  </div>
+                  <div className="text-[10px] text-slate-500 mt-1 font-mono">
+                    {regPhone ? `+91 ${regPhone}` : '+91 10-digit number'} ({regPhone.length}/10 digits)
+                  </div>
                 </div>
               </div>
 
@@ -437,14 +477,28 @@ export default function LoginModal({
 
               <div>
                 <label className="block text-slate-400 font-semibold mb-1">Password</label>
-                <input
-                  type="password"
-                  required
-                  value={regPassword}
-                  onChange={(e) => setRegPassword(e.target.value)}
-                  placeholder="Create password"
-                  className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-white font-mono focus:outline-none focus:border-cyan-500"
-                />
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
+                    <Lock className="w-4 h-4" />
+                  </div>
+                  <input
+                    type={showRegPassword ? 'text' : 'password'}
+                    required
+                    value={regPassword}
+                    onChange={(e) => setRegPassword(e.target.value)}
+                    placeholder="Create a secure password"
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-10 pr-10 p-2.5 text-white font-mono focus:outline-none focus:border-cyan-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowRegPassword(!showRegPassword)}
+                    className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-cyan-400 transition-colors cursor-pointer"
+                    title={showRegPassword ? "Hide password" : "Show password"}
+                    aria-label="Toggle password visibility"
+                  >
+                    {showRegPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
               </div>
 
               {/* Submit & Cancel Buttons */}
@@ -498,13 +552,22 @@ export default function LoginModal({
                     <Lock className="w-4 h-4" />
                   </div>
                   <input
-                    type="password"
+                    type={showAdminPassword ? 'text' : 'password'}
                     required
                     value={adminPasscode}
                     onChange={(e) => setAdminPasscode(e.target.value)}
                     placeholder="Enter admin passcode (default: admin123)"
-                    className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white focus:outline-none focus:border-emerald-500 font-mono"
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-10 pr-10 py-2.5 text-xs text-white focus:outline-none focus:border-emerald-500 font-mono"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowAdminPassword(!showAdminPassword)}
+                    className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-emerald-400 transition-colors cursor-pointer"
+                    title={showAdminPassword ? "Hide passcode" : "Show passcode"}
+                    aria-label="Toggle passcode visibility"
+                  >
+                    {showAdminPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
                 </div>
                 <p className="text-[11px] text-slate-500 mt-1">
                   Default Demo Passcode: <code className="text-emerald-400 bg-slate-900 px-1 py-0.5 rounded">admin123</code>
