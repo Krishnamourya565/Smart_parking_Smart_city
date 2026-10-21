@@ -46,6 +46,20 @@ export default function LoginModal({
   const [customerIdentifier, setCustomerIdentifier] = useState('');
   const [customerPassword, setCustomerPassword] = useState('');
 
+  // Customer Register Form State
+  const [regName, setRegName] = useState('');
+  const [regEmail, setRegEmail] = useState('');
+  const [regPhone, setRegPhone] = useState('');
+  const [regPlate, setRegPlate] = useState('');
+  const [regType, setRegType] = useState('EV');
+  const [regBattery, setRegBattery] = useState(18);
+  const [regPassword, setRegPassword] = useState('password123');
+
+  // Admin Form State
+  const [adminPasscode, setAdminPasscode] = useState('admin123');
+  const [errorMessage, setErrorMessage] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   const handleCustomerLoginSubmit = async (e) => {
     e.preventDefault();
     setErrorMessage('');
