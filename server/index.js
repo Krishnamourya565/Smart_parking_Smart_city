@@ -12,6 +12,7 @@ const { runBatchSimulation, BENCHMARK_METRICS } = require('./simulationEngine');
 const { supabase } = require('./supabase');
 const {
   syncSpotToSupabase,
+  syncAllSpotsToSupabase,
   syncCustomerToSupabase,
   syncParkingSessionToSupabase,
   syncReportToSupabase
@@ -22,6 +23,11 @@ const PORT = process.env.PORT || 5000;
 
 app.use(cors());
 app.use(express.json());
+
+// Synchronize physical parking bays to Supabase on startup
+if (supabase) {
+  syncAllSpotsToSupabase(state.spots);
+}
 
 // -------------------------------------------------------------
 // 0. SUPABASE DATABASE CONNECTION STATUS
@@ -45,18 +51,23 @@ app.get('/api/supabase/status', async (req, res) => {
     if (error) {
       return res.json({
         connected: true,
-        projectUrl: process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
+        projectUrl: process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://ubgivwmkclvzqnrkyapr.supabase.co',
         tablesCreated: false,
-        message: 'Connected to Supabase project, but tables are not yet created in PostgreSQL. Run server/supabase_schema.sql in the Supabase SQL Editor.',
+        message: 'Connected to Supabase project, but tables are not yet accessible. Run server/supabase_schema.sql in the Supabase SQL Editor.',
         error: error.message
       });
     }
 
-    const { count } = await supabase.from('spots').select('*', { count: 'exact' });
+    let { count } = await supabase.from('spots').select('*', { count: 'exact' });
+    if (!count || count === 0) {
+      await syncAllSpotsToSupabase(state.spots);
+      const recheck = await supabase.from('spots').select('*', { count: 'exact' });
+      count = recheck.count || 0;
+    }
 
     return res.json({
       connected: true,
-      projectUrl: process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
+      projectUrl: process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://ubgivwmkclvzqnrkyapr.supabase.co',
       tablesCreated: true,
       spotsCount: count,
       message: 'Supabase database tables verified and active.'

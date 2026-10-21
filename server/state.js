@@ -89,240 +89,15 @@ function createInitialSpots() {
 }
 
 function createInitialCustomers() {
-  return [
-    {
-      id: 'CUST-1001',
-      name: 'Alex Johnson',
-      email: 'alex.johnson@example.com',
-      phone: '+91 98765 43210',
-      password: 'password123',
-      vehiclePlate: 'EV-702-NX',
-      vehicleType: 'EV',
-      batteryLevel: 18, // Critical EV demand
-      registeredAt: '2026-08-15T09:30:00.000Z',
-      status: 'active',
-      totalBookings: 14,
-      totalSpent: 4250.00,
-      lastLogin: new Date(Date.now() - 1000 * 60 * 12).toISOString(),
-      currentStatus: 'Seeking Spot'
-    },
-    {
-      id: 'CUST-1002',
-      name: 'Sarah Connor',
-      email: 'sarah.c@example.com',
-      phone: '+91 98123 45678',
-      password: 'password123',
-      vehiclePlate: 'ICE-441-SC',
-      vehicleType: 'Non-EV',
-      batteryLevel: null,
-      registeredAt: '2026-08-18T14:20:00.000Z',
-      status: 'active',
-      totalBookings: 22,
-      totalSpent: 2850.00,
-      lastLogin: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
-      currentStatus: 'Seeking Spot'
-    },
-    {
-      id: 'CUST-1003',
-      name: 'Priya Sharma',
-      email: 'priya.sharma@example.com',
-      phone: '+91 98345 67890',
-      password: 'password123',
-      vehiclePlate: 'EV-319-PS',
-      vehicleType: 'EV',
-      batteryLevel: 65, // Normal EV demand
-      registeredAt: '2026-08-22T11:15:00.000Z',
-      status: 'active',
-      totalBookings: 8,
-      totalSpent: 3650.00,
-      lastLogin: new Date(Date.now() - 1000 * 60 * 120).toISOString(),
-      currentStatus: 'Offline'
-    },
-    {
-      id: 'CUST-1004',
-      name: 'David Kim',
-      email: 'david.kim@example.com',
-      phone: '+91 98456 78901',
-      password: 'password123',
-      vehiclePlate: 'ICE-884-DK',
-      vehicleType: 'Non-EV',
-      batteryLevel: null,
-      registeredAt: '2026-08-25T16:40:00.000Z',
-      status: 'active',
-      totalBookings: 19,
-      totalSpent: 2940.00,
-      lastLogin: new Date(Date.now() - 1000 * 60 * 240).toISOString(),
-      currentStatus: 'Offline'
-    },
-    {
-      id: 'CUST-1005',
-      name: 'Elena Rostova',
-      email: 'elena.rostova@example.com',
-      phone: '+91 98567 89012',
-      password: 'password123',
-      vehiclePlate: 'EV-992-ER',
-      vehicleType: 'EV',
-      batteryLevel: 12, // Critical EV demand
-      registeredAt: '2026-08-28T08:50:00.000Z',
-      status: 'active',
-      totalBookings: 5,
-      totalSpent: 4180.00,
-      lastLogin: new Date(Date.now() - 1000 * 60 * 300).toISOString(),
-      currentStatus: 'Offline'
-    },
-    {
-      id: 'CUST-1006',
-      name: 'Marcus Vance',
-      email: 'marcus.v@example.com',
-      phone: '+91 98678 90123',
-      password: 'password123',
-      vehiclePlate: 'ICE-102-MV',
-      vehicleType: 'Non-EV',
-      batteryLevel: null,
-      registeredAt: '2026-09-01T10:00:00.000Z',
-      status: 'suspended',
-      totalBookings: 2,
-      totalSpent: 580.00,
-      lastLogin: new Date(Date.now() - 1000 * 60 * 1400).toISOString(),
-      currentStatus: 'Suspended'
-    }
-  ];
+  return [];
 }
 
 function createInitialReports() {
-  return [
-    {
-      id: 'REP-101',
-      title: 'Charger Cable Display Glitch at EV02',
-      category: 'EV Charger Fault',
-      spotId: 'EV02',
-      priority: 'High',
-      status: 'In Progress', // 'Pending' | 'In Progress' | 'Resolved'
-      customerId: 'CUST-1001',
-      customerName: 'Alex Johnson',
-      customerEmail: 'alex.johnson@example.com',
-      vehiclePlate: 'EV-702-NX',
-      description: 'The 50kW fast charger display at EV02 showed connection timeout when plugging in.',
-      adminNotes: 'Relay diagnostics run remotely; technician inspecting physical connector.',
-      submittedAt: new Date(Date.now() - 1000 * 60 * 180).toISOString(),
-      updatedAt: new Date(Date.now() - 1000 * 60 * 30).toISOString()
-    },
-    {
-      id: 'REP-102',
-      title: 'Standard Car Parked in Dedicated EV Bay EV05',
-      category: 'Wrong Parking / Misuse',
-      spotId: 'EV05',
-      priority: 'Critical',
-      status: 'Resolved',
-      customerId: 'CUST-1005',
-      customerName: 'Elena Rostova',
-      customerEmail: 'elena.rostova@example.com',
-      vehiclePlate: 'EV-992-ER',
-      description: 'A non-EV vehicle was occupying charging bay EV05 while my battery was at 12%.',
-      adminNotes: 'Warden dispatched to reroute ICE vehicle to Row 2 regular spot R08. EV05 is now free.',
-      submittedAt: new Date(Date.now() - 1000 * 60 * 360).toISOString(),
-      updatedAt: new Date(Date.now() - 1000 * 60 * 90).toISOString()
-    },
-    {
-      id: 'REP-103',
-      title: 'Automated Billing Receipt Question',
-      category: 'Billing & Payment',
-      spotId: 'EV01',
-      priority: 'Low',
-      status: 'Pending',
-      customerId: 'CUST-1003',
-      customerName: 'Priya Sharma',
-      customerEmail: 'priya.sharma@example.com',
-      vehiclePlate: 'EV-319-PS',
-      description: 'Requesting breakdown of energy kWh rate vs dwell time fee for last Tuesday invoice.',
-      adminNotes: '',
-      submittedAt: new Date(Date.now() - 1000 * 60 * 50).toISOString(),
-      updatedAt: new Date(Date.now() - 1000 * 60 * 50).toISOString()
-    }
-  ];
+  return [];
 }
 
 function createInitialParkingSessions() {
-  return [
-    {
-      id: 'PARK-1024',
-      customerId: 'CUST-1001',
-      customerName: 'Alex Johnson',
-      customerEmail: 'alex.johnson@example.com',
-      vehiclePlate: 'EV-702-NX',
-      vehicleType: 'EV',
-      spotId: 'EV02',
-      spotType: 'ev',
-      chargerPowerKw: 50,
-      chargerStatus: 'CHARGING_COMPLETE', // 'AVAILABLE' | 'RESERVED' | 'CONNECTED' | 'CHARGING' | 'CHARGING_COMPLETE' | 'CHECKOUT_REQUESTED' | 'APPROACHING_EXIT' | 'EXIT_VERIFIED' | 'COMPLETED'
-      batteryLevel: 100,
-      initialBatteryLevel: 18,
-      entryTime: new Date(Date.now() - 1000 * 60 * 135).toISOString(), // 2h 15m ago (2.25 hours)
-      chargingStartTime: new Date(Date.now() - 1000 * 60 * 130).toISOString(),
-      chargingCompleteTime: new Date(Date.now() - 1000 * 60 * 25).toISOString(),
-      checkoutRequestedTime: null,
-      exitVerifiedTime: null,
-      parkingDurationMinutes: 135,
-      energyUsedKwh: 24.6,
-      chargingCost: 369.00, // 24.6 kWh × ₹15.00/kWh = ₹369.00
-      parkingCost: 67.50,   // 2.25 hr × ₹30.00/hr = ₹67.50
-      totalAmount: 436.50,  // ₹369.00 + ₹67.50 = ₹436.50
-      status: 'CHARGING_COMPLETE',
-      paymentStatus: 'PENDING'
-    },
-    {
-      id: 'PARK-1020',
-      customerId: 'CUST-1003',
-      customerName: 'Priya Sharma',
-      customerEmail: 'priya.sharma@example.com',
-      vehiclePlate: 'EV-319-PS',
-      vehicleType: 'EV',
-      spotId: 'EV01',
-      spotType: 'ev',
-      chargerPowerKw: 50,
-      chargerStatus: 'COMPLETED',
-      batteryLevel: 90,
-      initialBatteryLevel: 25,
-      entryTime: new Date(Date.now() - 1000 * 60 * 240).toISOString(),
-      chargingStartTime: new Date(Date.now() - 1000 * 60 * 235).toISOString(),
-      chargingCompleteTime: new Date(Date.now() - 1000 * 60 * 180).toISOString(),
-      checkoutRequestedTime: new Date(Date.now() - 1000 * 60 * 125).toISOString(),
-      exitVerifiedTime: new Date(Date.now() - 1000 * 60 * 120).toISOString(),
-      parkingDurationMinutes: 120, // 2 hours
-      energyUsedKwh: 32.5,
-      chargingCost: 487.50, // 32.5 kWh × ₹15.00/kWh = ₹487.50
-      parkingCost: 60.00,   // 2.0 hr × ₹30.00/hr = ₹60.00
-      totalAmount: 547.50,  // ₹487.50 + ₹60.00 = ₹547.50
-      status: 'COMPLETED',
-      paymentStatus: 'PAID'
-    },
-    {
-      id: 'PARK-1018',
-      customerId: 'CUST-1002',
-      customerName: 'Sarah Connor',
-      customerEmail: 'sarah.c@example.com',
-      vehiclePlate: 'ICE-441-SC',
-      vehicleType: 'Non-EV',
-      spotId: 'R14',
-      spotType: 'regular',
-      chargerPowerKw: null,
-      chargerStatus: null,
-      batteryLevel: null,
-      initialBatteryLevel: null,
-      entryTime: new Date(Date.now() - 1000 * 60 * 360).toISOString(),
-      chargingStartTime: null,
-      chargingCompleteTime: null,
-      checkoutRequestedTime: new Date(Date.now() - 1000 * 60 * 185).toISOString(),
-      exitVerifiedTime: new Date(Date.now() - 1000 * 60 * 180).toISOString(),
-      parkingDurationMinutes: 180, // 3 hours
-      energyUsedKwh: 0,
-      chargingCost: 0.00,
-      parkingCost: 90.00, // 3.0 hr × ₹30.00/hr = ₹90.00
-      totalAmount: 90.00, // ₹90.00
-      status: 'COMPLETED',
-      paymentStatus: 'PAID'
-    }
-  ];
+  return [];
 }
 
 class SystemState {
@@ -332,73 +107,14 @@ class SystemState {
     this.reports = createInitialReports();
     this.parkingSessions = createInitialParkingSessions();
 
-    // Set initial spot EV02 as occupied by Alex Johnson's active session
-    const ev02Spot = this.spots.find(s => s.id === 'EV02');
-    if (ev02Spot) {
-      ev02Spot.status = 'occupied';
-      ev02Spot.occupiedBy = {
-        vehicleId: 'EV-702-NX',
-        customerId: 'CUST-1001',
-        isEV: true,
-        batteryLevel: 100,
-        sessionId: 'PARK-1024',
-        arrivedAt: new Date(Date.now() - 1000 * 60 * 135).toISOString()
-      };
-    }
-    
     this.activeUsers = {
-      totalLoggedIn: 3,
-      activeDriversSeeking: 2,
-      adminSessions: 1,
-      sessions: [
-        { id: 'sess_admin_1', role: 'admin', userId: 'ADMIN-01', userName: 'System Admin', loginTime: new Date().toISOString() },
-        { id: 'sess_drv_101', role: 'customer', userId: 'CUST-1001', userName: 'Alex Johnson', vehicleType: 'EV', vehiclePlate: 'EV-702-NX', batteryLevel: 100, loginTime: new Date(Date.now() - 1000 * 60 * 12).toISOString() },
-        { id: 'sess_drv_102', role: 'customer', userId: 'CUST-1002', userName: 'Sarah Connor', vehicleType: 'Non-EV', vehiclePlate: 'ICE-441-SC', batteryLevel: null, loginTime: new Date(Date.now() - 1000 * 60 * 45).toISOString() }
-      ]
+      totalLoggedIn: 0,
+      activeDriversSeeking: 0,
+      adminSessions: 0,
+      sessions: []
     };
 
-    this.loginLogs = [
-      {
-        id: 'LOG-101',
-        timestamp: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
-        userId: 'CUST-1002',
-        userName: 'Sarah Connor',
-        userEmail: 'sarah.c@example.com',
-        role: 'customer',
-        vehiclePlate: 'ICE-441-SC',
-        vehicleType: 'Non-EV',
-        ipAddress: '192.168.1.104',
-        action: 'Customer Login',
-        status: 'Success'
-      },
-      {
-        id: 'LOG-102',
-        timestamp: new Date(Date.now() - 1000 * 60 * 12).toISOString(),
-        userId: 'CUST-1001',
-        userName: 'Alex Johnson',
-        userEmail: 'alex.johnson@example.com',
-        role: 'customer',
-        vehiclePlate: 'EV-702-NX',
-        vehicleType: 'EV (18% Battery)',
-        ipAddress: '192.168.1.102',
-        action: 'Customer Login & Spot Request',
-        status: 'Success'
-      },
-      {
-        id: 'LOG-103',
-        timestamp: new Date(Date.now() - 1000 * 60 * 5).toISOString(),
-        userId: 'ADMIN-01',
-        userName: 'System Administrator',
-        userEmail: 'admin@smartparking.org',
-        role: 'admin',
-        vehiclePlate: 'N/A',
-        vehicleType: 'Admin Console',
-        ipAddress: '127.0.0.1',
-        action: 'Admin Authentication',
-        status: 'Success'
-      }
-    ];
-
+    this.loginLogs = [];
     this.arrivalFeed = [];
     this.stats = {
       totalAllocations: 0,
@@ -974,30 +690,15 @@ class SystemState {
     this.arrivalFeed = [];
     this.reports = createInitialReports();
     this.parkingSessions = createInitialParkingSessions();
+    this.customers = createInitialCustomers();
     
-    const ev02Spot = this.spots.find(s => s.id === 'EV02');
-    if (ev02Spot) {
-      ev02Spot.status = 'occupied';
-      ev02Spot.occupiedBy = {
-        vehicleId: 'EV-702-NX',
-        customerId: 'CUST-1001',
-        isEV: true,
-        batteryLevel: 100,
-        sessionId: 'PARK-1024',
-        arrivedAt: new Date(Date.now() - 1000 * 60 * 135).toISOString()
-      };
-    }
-
     this.activeUsers = {
-      totalLoggedIn: 3,
-      activeDriversSeeking: 2,
-      adminSessions: 1,
-      sessions: [
-        { id: 'sess_admin_1', role: 'admin', userId: 'ADMIN-01', userName: 'System Administrator', loginTime: new Date().toISOString() },
-        { id: 'sess_drv_101', role: 'customer', userId: 'CUST-1001', userName: 'Alex Johnson', vehicleType: 'EV', vehiclePlate: 'EV-702-NX', batteryLevel: 100, loginTime: new Date(Date.now() - 1000 * 60 * 12).toISOString() },
-        { id: 'sess_drv_102', role: 'customer', userId: 'CUST-1002', userName: 'Sarah Connor', vehicleType: 'Non-EV', vehiclePlate: 'ICE-441-SC', batteryLevel: null, loginTime: new Date(Date.now() - 1000 * 60 * 45).toISOString() }
-      ]
+      totalLoggedIn: 0,
+      activeDriversSeeking: 0,
+      adminSessions: 0,
+      sessions: []
     };
+    this.loginLogs = [];
     this.stats = {
       totalAllocations: 0,
       smartAllocations: 0,

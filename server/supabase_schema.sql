@@ -79,14 +79,27 @@ CREATE TABLE reports (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 6. DISABLE ROW LEVEL SECURITY (RLS) FOR PROTOTYPE / API ACCESS
+-- 6. DISABLE ROW LEVEL SECURITY (RLS) & ADD PERMISSIVE POLICIES
 -- Allows the Supabase publishable key to read & write freely from backend/frontend
 ALTER TABLE spots DISABLE ROW LEVEL SECURITY;
 ALTER TABLE customers DISABLE ROW LEVEL SECURITY;
 ALTER TABLE parking_sessions DISABLE ROW LEVEL SECURITY;
 ALTER TABLE reports DISABLE ROW LEVEL SECURITY;
 
--- 7. SEED ALL 30 SPOTS
+-- Fallback permissive policies in case RLS is left enabled
+DROP POLICY IF EXISTS "Public spots access" ON spots;
+CREATE POLICY "Public spots access" ON spots FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Public customers access" ON customers;
+CREATE POLICY "Public customers access" ON customers FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Public parking_sessions access" ON parking_sessions;
+CREATE POLICY "Public parking_sessions access" ON parking_sessions FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Public reports access" ON reports;
+CREATE POLICY "Public reports access" ON reports FOR ALL USING (true) WITH CHECK (true);
+
+-- 7. INITIALIZE ALL 30 PARKING SPOTS (Layout definition — All free & clean)
 INSERT INTO spots (id, name, type, row, col, x, y, distance_from_gate, status) VALUES
 -- Row 1: EV Chargers (EV01-EV06) + Regular (R01-R04)
 ('EV01', 'EV Bay 1', 'ev', 1, 1, 1.5, 1.5, 2.12, 'free'),
@@ -122,19 +135,10 @@ INSERT INTO spots (id, name, type, row, col, x, y, distance_from_gate, status) V
 ('R21', 'Spot R-21', 'regular', 3, 7, 10.5, 5.5, 11.86, 'free'),
 ('R22', 'Spot R-22', 'regular', 3, 8, 12.0, 5.5, 13.20, 'free'),
 ('R23', 'Spot R-23', 'regular', 3, 9, 13.5, 5.5, 14.58, 'free'),
-('R24', 'Spot R-24', 'regular', 3, 10, 15.0, 5.5, 15.98, 'free');
+('R24', 'Spot R-24', 'regular', 3, 10, 15.0, 5.5, 15.98, 'free')
+ON CONFLICT (id) DO UPDATE SET 
+    status = 'free', 
+    is_faulty = FALSE, 
+    occupied_by = NULL, 
+    reserved_until = NULL;
 
--- 8. SEED INITIAL DEMO CUSTOMERS
-INSERT INTO customers (id, name, email, phone, password, vehicle_plate, vehicle_type, battery_level, status, total_bookings, total_spent) VALUES
-('CUST-1001', 'Alex Johnson', 'alex.johnson@example.com', '+91 98765 43210', 'password123', 'EV-702-NX', 'EV', 18, 'active', 14, 4250.00),
-('CUST-1002', 'Sarah Connor', 'sarah.c@example.com', '+91 98123 45678', 'password123', 'ICE-441-SC', 'Non-EV', NULL, 'active', 22, 2850.00),
-('CUST-1003', 'Priya Sharma', 'priya.sharma@example.com', '+91 98345 67890', 'password123', 'EV-319-PS', 'EV', 65, 'active', 8, 3650.00),
-('CUST-1004', 'David Kim', 'david.kim@example.com', '+91 98456 78901', 'password123', 'ICE-884-DK', 'Non-EV', NULL, 'active', 19, 2940.00),
-('CUST-1005', 'Elena Rostova', 'elena.rostova@example.com', '+91 98567 89012', 'password123', 'EV-992-ER', 'EV', 12, 'active', 5, 4180.00),
-('CUST-1006', 'Marcus Vance', 'marcus.v@example.com', '+91 98678 90123', 'password123', 'ICE-102-MV', 'Non-EV', NULL, 'suspended', 2, 580.00);
-
--- 9. SEED INITIAL COMPLAINT / FAULT REPORTS
-INSERT INTO reports (id, title, category, spot_id, priority, status, customer_id, customer_name, customer_email, vehicle_plate, description, admin_notes) VALUES
-('REP-101', 'Charger Cable Display Glitch at EV02', 'EV Charger Fault', 'EV02', 'High', 'In Progress', 'CUST-1001', 'Alex Johnson', 'alex.johnson@example.com', 'EV-702-NX', 'The 50kW fast charger display at EV02 showed connection timeout when plugging in.', 'Relay diagnostics run remotely; technician inspecting physical connector.'),
-('REP-102', 'Standard Car Parked in Dedicated EV Bay EV05', 'Wrong Parking / Misuse', 'EV05', 'Critical', 'Resolved', 'CUST-1005', 'Elena Rostova', 'elena.rostova@example.com', 'EV-992-ER', 'A non-EV vehicle was occupying charging bay EV05 while my battery was at 12%.', 'Warden dispatched to reroute ICE vehicle to Row 2 regular spot R08. EV05 is now free.'),
-('REP-103', 'Automated Billing Receipt Question', 'Billing & Payment', 'EV01', 'Low', 'Pending', 'CUST-1003', 'Priya Sharma', 'priya.sharma@example.com', 'EV-319-PS', 'Requesting breakdown of energy kWh rate vs dwell time fee for last Tuesday invoice.', '');

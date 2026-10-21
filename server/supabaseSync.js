@@ -10,20 +10,60 @@ async function syncSpotToSupabase(spot) {
   try {
     const { error } = await supabase
       .from('spots')
-      .update({
+      .upsert({
+        id: spot.id,
+        name: spot.name,
+        type: spot.type,
+        row: spot.row,
+        col: spot.col,
+        x: spot.x,
+        y: spot.y,
+        distance_from_gate: spot.distanceFromGate,
         status: spot.status,
         is_faulty: Boolean(spot.isFaulty),
         occupied_by: spot.occupiedBy,
         reserved_until: spot.reservedUntil,
         updated_at: new Date().toISOString()
-      })
-      .eq('id', spot.id);
+      }, { onConflict: 'id' });
 
     if (error) {
       console.error(`[Supabase Sync] Failed to update spot ${spot.id}:`, error.message);
     }
   } catch (err) {
     console.error(`[Supabase Sync] Error syncing spot ${spot.id}:`, err.message);
+  }
+}
+
+async function syncAllSpotsToSupabase(spots) {
+  if (!supabase || !spots || !spots.length) return;
+  try {
+    const formatted = spots.map(s => ({
+      id: s.id,
+      name: s.name,
+      type: s.type,
+      row: s.row,
+      col: s.col,
+      x: s.x,
+      y: s.y,
+      distance_from_gate: s.distanceFromGate,
+      status: s.status,
+      is_faulty: Boolean(s.isFaulty),
+      occupied_by: s.occupiedBy,
+      reserved_until: s.reservedUntil,
+      updated_at: new Date().toISOString()
+    }));
+
+    const { error } = await supabase
+      .from('spots')
+      .upsert(formatted, { onConflict: 'id' });
+
+    if (error) {
+      console.error('[Supabase Sync] Failed to sync all spots:', error.message);
+    } else {
+      console.log(`[Supabase Sync] Successfully synchronized all ${spots.length} spots.`);
+    }
+  } catch (err) {
+    console.error('[Supabase Sync] Error syncing all spots:', err.message);
   }
 }
 
@@ -124,7 +164,9 @@ async function syncReportToSupabase(report) {
 
 module.exports = {
   syncSpotToSupabase,
+  syncAllSpotsToSupabase,
   syncCustomerToSupabase,
   syncParkingSessionToSupabase,
   syncReportToSupabase
 };
+

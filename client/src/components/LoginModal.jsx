@@ -43,38 +43,8 @@ export default function LoginModal({
   }, [isOpen, initialAuthMode]);
   
   // Customer Login Form State
-  const [customerIdentifier, setCustomerIdentifier] = useState('alex.johnson@example.com');
-  const [customerPassword, setCustomerPassword] = useState('password123');
-
-  // Customer Register Form State
-  const [regName, setRegName] = useState('');
-  const [regEmail, setRegEmail] = useState('');
-  const [regPhone, setRegPhone] = useState('');
-  const [regPlate, setRegPlate] = useState('');
-  const [regType, setRegType] = useState('EV');
-  const [regBattery, setRegBattery] = useState(18);
-  const [regPassword, setRegPassword] = useState('password123');
-
-  // Admin Form State
-  const [adminPasscode, setAdminPasscode] = useState('admin123');
-  const [errorMessage, setErrorMessage] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  if (!isOpen) return null;
-
-  // Preset demo accounts for quick evaluation
-  const demoAccounts = [
-    { label: 'Alex (Critical EV 18%)', identifier: 'alex.johnson@example.com', type: 'EV', plate: 'EV-702-NX', battery: 18 },
-    { label: 'Sarah (Standard ICE)', identifier: 'sarah.c@example.com', type: 'Non-EV', plate: 'ICE-441-SC', battery: null },
-    { label: 'Priya (Normal EV 65%)', identifier: 'priya.sharma@example.com', type: 'EV', plate: 'EV-319-PS', battery: 65 },
-    { label: 'David (Standard ICE)', identifier: 'david.kim@example.com', type: 'Non-EV', plate: 'ICE-884-DK', battery: null }
-  ];
-
-  const handleDemoSelect = (acc) => {
-    setCustomerIdentifier(acc.identifier);
-    setCustomerPassword('password123');
-    setErrorMessage('');
-  };
+  const [customerIdentifier, setCustomerIdentifier] = useState('');
+  const [customerPassword, setCustomerPassword] = useState('');
 
   const handleCustomerLoginSubmit = async (e) => {
     e.preventDefault();
@@ -273,31 +243,19 @@ export default function LoginModal({
           {authMode === 'customer_login' && (
             <form onSubmit={handleCustomerLoginSubmit} className="space-y-4">
               
-              {/* Quick 1-Click Demo Profiles */}
-              <div className="p-3 bg-slate-900/60 border border-slate-800 rounded-xl space-y-2">
-                <div className="flex items-center justify-between text-[11px] text-slate-400 uppercase font-semibold">
-                  <span className="flex items-center gap-1 text-cyan-400">
-                    <Sparkles className="w-3 h-3" /> Quick Demo Login Profiles
-                  </span>
-                  <span>Click to Autofill</span>
+              {/* Registration Prompt for New Drivers */}
+              <div className="p-3 bg-slate-900/60 border border-slate-800 rounded-xl flex items-center justify-between text-xs">
+                <div>
+                  <div className="text-white font-medium">New to Smart Parking?</div>
+                  <div className="text-[11px] text-slate-400">Register your vehicle in 10 seconds</div>
                 </div>
-                <div className="grid grid-cols-2 gap-1.5">
-                  {demoAccounts.map((acc, idx) => (
-                    <button
-                      key={idx}
-                      type="button"
-                      onClick={() => handleDemoSelect(acc)}
-                      className={`text-left p-2 rounded-lg border text-xs transition-all ${
-                        customerIdentifier === acc.identifier
-                          ? 'bg-cyan-950/80 border-cyan-500 text-cyan-300 font-bold'
-                          : 'bg-slate-950 border-slate-800 text-slate-300 hover:border-slate-700'
-                      }`}
-                    >
-                      <div className="truncate font-semibold">{acc.label}</div>
-                      <div className="text-[10px] text-slate-500 font-mono">{acc.plate}</div>
-                    </button>
-                  ))}
-                </div>
+                <button
+                  type="button"
+                  onClick={() => { setAuthMode('customer_register'); setErrorMessage(''); }}
+                  className="px-3 py-1.5 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 rounded-lg text-white font-semibold transition-all shadow-sm"
+                >
+                  Create Account
+                </button>
               </div>
 
               {/* Email / Plate / ID Input */}
@@ -314,7 +272,7 @@ export default function LoginModal({
                     required
                     value={customerIdentifier}
                     onChange={(e) => setCustomerIdentifier(e.target.value)}
-                    placeholder="e.g. alex.johnson@example.com or EV-702-NX"
+                    placeholder="e.g. driver@example.com or KA-01-AB-1234"
                     className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-500 font-sans"
                   />
                 </div>
