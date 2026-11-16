@@ -422,14 +422,20 @@ class SystemState {
   // REPORTS SECTION METHODS
   // -----------------------------------------
   getReports(userId = null, role = 'admin') {
-    if (role === 'admin') {
+    if (role === 'admin' || !userId) {
       return this.reports;
     }
-    return this.reports.filter(r => r.customerId === userId || r.customerEmail === userId);
+    const clean = String(userId).trim().toLowerCase();
+    return this.reports.filter(r => 
+      (r.customerId && String(r.customerId).trim().toLowerCase() === clean) ||
+      (r.customerEmail && String(r.customerEmail).trim().toLowerCase() === clean) ||
+      (r.vehiclePlate && String(r.vehiclePlate).trim().toLowerCase() === clean) ||
+      (r.customerName && String(r.customerName).trim().toLowerCase() === clean)
+    );
   }
 
   createReport(data) {
-    const id = `REP-${100 + this.reports.length + 1}`;
+    const id = data.id || ('REP-' + Math.floor(1000 + Math.random() * 9000) + '-' + Date.now().toString().slice(-4));
     const newReport = {
       id,
       title: data.title || 'Incident Report',
@@ -543,9 +549,11 @@ class SystemState {
   }
 
   createParkingSession(data) {
-    const id = `PARK-${1000 + this.parkingSessions.length + 1}`;
-    const entryTime = data.entryTime || new Date().toISOString();
+    const id = data.id || ('PARK-' + Math.floor(1000 + Math.random() * 9000) + '-' + Date.now().toString().slice(-4));
     const isEV = data.isEV || data.vehicleType === 'EV' || data.spotType === 'ev';
+    const initialStatus = data.status || 'ALLOCATED';
+    const isAlreadyParked = initialStatus === 'PARKED' || initialStatus === 'CHARGING';
+    const entryTime = isAlreadyParked ? (data.entryTime || new Date().toISOString()) : null;
     
     const newSession = {
       id,
@@ -557,11 +565,12 @@ class SystemState {
       spotId: data.spotId || 'EV01',
       spotType: isEV ? 'ev' : 'regular',
       chargerPowerKw: isEV ? 50 : null,
-      chargerStatus: isEV ? 'CHARGING' : null,
+      chargerStatus: isEV ? (isAlreadyParked ? 'CHARGING' : 'STANDBY') : null,
       batteryLevel: isEV ? Number(data.batteryLevel || 20) : null,
       initialBatteryLevel: isEV ? Number(data.batteryLevel || 20) : null,
+      gateStatus: isAlreadyParked ? 'ENTRANCE_GRANTED' : 'WAITING_ARRIVAL',
       entryTime,
-      chargingStartTime: isEV ? entryTime : null,
+      chargingStartTime: isEV && isAlreadyParked ? entryTime : null,
       chargingCompleteTime: null,
       checkoutRequestedTime: null,
       exitVerifiedTime: null,
@@ -570,7 +579,7 @@ class SystemState {
       chargingCost: 0.00,
       parkingCost: 30.00,
       totalAmount: 30.00,
-      status: isEV ? 'CHARGING' : 'PARKED',
+      status: initialStatus,
       paymentStatus: 'PENDING'
     };
 
@@ -687,6 +696,80 @@ class SystemState {
       spots: this.spots,
       activeUsers: this.activeUsers
     };
+  }
+
+  markVehicleArrivedAtGate(sessionId, customerId = null, vehiclePlate = null) {
+    let session = null;
+    if (sessionId) {
+      session = this.getParkingSessionById(sessionId);
+    }
+    if (!session && customerId) {
+      session = this.parkingSessions.find(s => s.customerId === customerId && s.status !== 'COMPLETED');
+    }
+    if (!session && vehiclePlate) {
+      session = this.parkingSessions.find(s => s.vehiclePlate === vehiclePlate && s.status !== 'COMPLETED');
+    }
+
+    if (!session) return null;
+
+    session.gateStatus = 'WAITING_ENTRANCE_ACCESS';
+    session.status = 'WAITING_ENTRANCE_ACCESS';
+    session.arrivedAtGateTime = new Date().toISOString();
+
+    this.recordLoginLog({
+      userId: session.customerId || 'GUEST',
+      userName: session.customerName || 'Driver',
+      userEmail: session.customerEmail || 'driver@smartparking.org',
+      role: 'customer',
+      vehiclePlate: session.vehiclePlate,
+      vehicleType: session.vehicleType,
+      ipAddress: '192.168.1.1',
+      action: `Vehicle Arrived at Entrance Barrier: Waiting for Admin Entrance Clearance (${session.spotId})`,
+      status: 'Gate Clearance Pending'
+    });
+
+    return session;
+  }
+
+  grantEntranceAccess(sessionId) {
+    const session = this.getParkingSessionById(sessionId);
+    if (!session) return null;
+
+    const isEV = session.vehicleType === 'EV' || session.spotType === 'ev';
+    session.gateStatus = 'ENTRANCE_GRANTED';
+    session.status = isEV ? 'CHARGING' : 'PARKED';
+    session.entryTime = new Date().toISOString(); // OFFICIAL PARKING DWELL TIMER STARTS NOW
+    if (isEV) {
+      session.chargingStartTime = session.entryTime;
+      session.chargerStatus = 'CHARGING';
+    }
+
+    // Change physical spot from reserved to occupied
+    const spot = this.getSpotById(session.spotId);
+    if (spot) {
+      spot.status = 'occupied';
+      spot.occupiedBy = {
+        vehicleId: session.vehiclePlate,
+        customerId: session.customerId,
+        isEV,
+        arrivedAt: session.entryTime
+      };
+      spot.reservedUntil = null;
+    }
+
+    this.recordLoginLog({
+      userId: session.customerId || 'GUEST',
+      userName: session.customerName || 'Driver',
+      userEmail: session.customerEmail || 'driver@smartparking.org',
+      role: 'admin',
+      vehiclePlate: session.vehiclePlate,
+      vehicleType: session.vehicleType,
+      ipAddress: '127.0.0.1',
+      action: `Entrance Barrier Gate Opened by Admin for ${session.vehiclePlate} -> Bay ${session.spotId}. Timer Started.`,
+      status: 'Success'
+    });
+
+    return { session, spot };
   }
 
   reset() {
