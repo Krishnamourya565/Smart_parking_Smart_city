@@ -56,7 +56,7 @@ export default function LandingPage({
     if (spots && spots.length > 0) {
       setLiveSpots(spots);
     } else {
-      fetch('http://localhost:5000/api/spots')
+      fetch('/api/spots')
         .then(res => res.json())
         .then(data => {
           if (Array.isArray(data) && data.length > 0) setLiveSpots(data);
