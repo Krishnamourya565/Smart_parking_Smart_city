@@ -3,6 +3,28 @@
  * Centralized Indian Rupee (INR ₹) Pricing and Calculations
  */
 
+export const STATUS_COLORS = {
+  free: '#00D98B',       // Glowing Green: Soft emissive pad
+  charging: '#06B6D4',   // Electric Cyan: EV charging with pillar & pulsing ring
+  occupied: '#EF4444',   // Crimson Red: Occupied pad under car
+  reserved: '#F59E0B',   // Amber Yellow: Reserved
+  faulty: '#A855F7',     // Purple: Hardware Fault with rhythmic blink
+  fault: '#A855F7'
+};
+
+export const CAR_SHADES = [
+  '#0C1017', // Obsidian Black Metallic
+  '#F1F5F9', // Mineral Alpine White Metallic
+  '#475569', // Nardo Slate Grey Gloss
+  '#1E3A8A', // Deep Sapphire Blue Metallic
+  '#94A3B8', // Liquid Silver Metallic
+  '#991B1B', // Soul Red Crystal Metallic
+  '#064E3B', // British Racing Emerald Metallic
+  '#78716C', // Champagne Titanium Bronze
+  '#0369A1', // Deep Ocean Blue Metallic
+  '#334155'  // Cyber Anthracite Metallic
+];
+
 export const LOW_BATTERY_THRESHOLD = 25; // %
 export const CURRENCY_SYMBOL = '₹';
 

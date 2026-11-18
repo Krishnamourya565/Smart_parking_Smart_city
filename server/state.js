@@ -5,11 +5,45 @@
  */
 
 function createInitialSpots() {
+  const initialOccupancy = {
+    EV01: { status: 'free', occupant: null },
+    EV02: { status: 'charging', occupant: { vehicleId: 'EV-702-NX', plate: 'EV-702-NX', batteryLevel: 78, isEV: true, dwell: '18m' } },
+    EV03: { status: 'occupied', occupant: { vehicleId: 'EV-319-PS', plate: 'EV-319-PS', batteryLevel: 62, isEV: true, dwell: '34m' } },
+    EV04: { status: 'charging', occupant: { vehicleId: 'EV-992-ER', plate: 'EV-992-ER', batteryLevel: 45, isEV: true, dwell: '40m' } },
+    EV05: { status: 'free', occupant: null },
+    EV06: { status: 'reserved', occupant: { vehicleId: 'EV-889-JV', plate: 'EV-889-JV', batteryLevel: 15, isEV: true, dwell: 'Pre-Booked' } },
+    R01: { status: 'occupied', occupant: { vehicleId: 'ICE-441-SC', plate: 'ICE-441-SC', isEV: false } },
+    R02: { status: 'free', occupant: null },
+    R03: { status: 'occupied', occupant: { vehicleId: 'ICE-102-MV', plate: 'ICE-102-MV', isEV: false } },
+    R04: { status: 'occupied', occupant: { vehicleId: 'ICE-884-DK', plate: 'ICE-884-DK', isEV: false } },
+    R05: { status: 'free', occupant: null },
+    R06: { status: 'occupied', occupant: { vehicleId: 'ICE-552-KL', plate: 'ICE-552-KL', isEV: false } },
+    R07: { status: 'occupied', occupant: { vehicleId: 'ICE-910-TR', plate: 'ICE-910-TR', isEV: false } },
+    R08: { status: 'free', occupant: null },
+    R09: { status: 'occupied', occupant: { vehicleId: 'ICE-331-WQ', plate: 'ICE-331-WQ', isEV: false } },
+    R10: { status: 'occupied', occupant: { vehicleId: 'ICE-774-PO', plate: 'ICE-774-PO', isEV: false } },
+    R11: { status: 'reserved', occupant: { vehicleId: 'ICE-602-PL', plate: 'ICE-602-PL', isEV: false } },
+    R12: { status: 'occupied', occupant: { vehicleId: 'ICE-209-BN', plate: 'ICE-209-BN', isEV: false } },
+    R13: { status: 'occupied', occupant: { vehicleId: 'ICE-618-XZ', plate: 'ICE-618-XZ', isEV: false } },
+    R14: { status: 'occupied', occupant: { vehicleId: 'ICE-490-LM', plate: 'ICE-490-LM', isEV: false } },
+    R15: { status: 'occupied', occupant: { vehicleId: 'ICE-712-AA', plate: 'ICE-712-AA', isEV: false } },
+    R16: { status: 'free', occupant: null },
+    R17: { status: 'occupied', occupant: { vehicleId: 'ICE-839-BB', plate: 'ICE-839-BB', isEV: false } },
+    R18: { status: 'occupied', occupant: { vehicleId: 'ICE-442-CC', plate: 'ICE-442-CC', isEV: false } },
+    R19: { status: 'occupied', occupant: { vehicleId: 'ICE-901-DD', plate: 'ICE-901-DD', isEV: false } },
+    R20: { status: 'free', occupant: null },
+    R21: { status: 'occupied', occupant: { vehicleId: 'ICE-318-EE', plate: 'ICE-318-EE', isEV: false } },
+    R22: { status: 'occupied', occupant: { vehicleId: 'ICE-563-FF', plate: 'ICE-563-FF', isEV: false } },
+    R23: { status: 'occupied', occupant: { vehicleId: 'ICE-112-GG', plate: 'ICE-112-GG', isEV: false } },
+    R24: { status: 'free', occupant: null }
+  };
+
   const spots = [];
 
   // Row 1: EV Chargers (EV01 to EV06) + Regular (R01 to R04)
   for (let col = 1; col <= 6; col++) {
     const id = `EV0${col}`;
+    const occ = initialOccupancy[id] || { status: 'free', occupant: null };
     spots.push({
       id,
       name: `EV Bay ${col}`,
@@ -19,16 +53,17 @@ function createInitialSpots() {
       x: col * 1.5,
       y: 1.5,
       distanceFromGate: Number((Math.sqrt(Math.pow(col * 1.5, 2) + Math.pow(1.5, 2))).toFixed(2)),
-      status: 'free', // 'free' | 'occupied' | 'reserved' | 'faulty'
+      status: occ.status,
       isFaulty: false,
-      occupiedBy: null,
-      reservedUntil: null
+      occupiedBy: occ.occupant,
+      reservedUntil: occ.status === 'reserved' ? new Date(Date.now() + 15 * 60000).toISOString() : null
     });
   }
 
   for (let col = 7; col <= 10; col++) {
     const num = (col - 6).toString().padStart(2, '0');
     const id = `R${num}`;
+    const occ = initialOccupancy[id] || { status: 'free', occupant: null };
     spots.push({
       id,
       name: `Spot R-${num}`,
@@ -38,9 +73,9 @@ function createInitialSpots() {
       x: col * 1.5,
       y: 1.5,
       distanceFromGate: Number((Math.sqrt(Math.pow(col * 1.5, 2) + Math.pow(1.5, 2))).toFixed(2)),
-      status: 'free',
+      status: occ.status,
       isFaulty: false,
-      occupiedBy: null,
+      occupiedBy: occ.occupant,
       reservedUntil: null
     });
   }
@@ -49,6 +84,7 @@ function createInitialSpots() {
   for (let col = 1; col <= 10; col++) {
     const num = (col + 4).toString().padStart(2, '0');
     const id = `R${num}`;
+    const occ = initialOccupancy[id] || { status: 'free', occupant: null };
     spots.push({
       id,
       name: `Spot R-${num}`,
@@ -58,9 +94,9 @@ function createInitialSpots() {
       x: col * 1.5,
       y: 3.5,
       distanceFromGate: Number((Math.sqrt(Math.pow(col * 1.5, 2) + Math.pow(3.5, 2))).toFixed(2)),
-      status: 'free',
+      status: occ.status,
       isFaulty: false,
-      occupiedBy: null,
+      occupiedBy: occ.occupant,
       reservedUntil: null
     });
   }
@@ -69,6 +105,7 @@ function createInitialSpots() {
   for (let col = 1; col <= 10; col++) {
     const num = (col + 14).toString().padStart(2, '0');
     const id = `R${num}`;
+    const occ = initialOccupancy[id] || { status: 'free', occupant: null };
     spots.push({
       id,
       name: `Spot R-${num}`,
@@ -78,9 +115,9 @@ function createInitialSpots() {
       x: col * 1.5,
       y: 5.5,
       distanceFromGate: Number((Math.sqrt(Math.pow(col * 1.5, 2) + Math.pow(5.5, 2))).toFixed(2)),
-      status: 'free',
+      status: occ.status,
       isFaulty: false,
-      occupiedBy: null,
+      occupiedBy: occ.occupant,
       reservedUntil: null
     });
   }

@@ -55,13 +55,32 @@ export default function App() {
   const [activeRoute, setActiveRoute] = useState(null);
   const [activeDriverAllocation, setActiveDriverAllocation] = useState(null);
   
-  // Navigation & View Mode
-  // 'landing' | 'app'
-  const [viewMode, setViewMode] = useState('landing'); 
+  // Navigation & View Mode ('landing' | 'app') - Persisted across reloads
+  const [viewMode, setViewMode] = useState(() => {
+    try {
+      return localStorage.getItem('smart_parking_view_mode') || 'landing';
+    } catch (e) {
+      return 'landing';
+    }
+  }); 
   
-  // User Authentication State
-  const [currentUser, setCurrentUser] = useState(null); 
-  const [currentSession, setCurrentSession] = useState(null);
+  // User Authentication State - Persisted across reloads
+  const [currentUser, setCurrentUser] = useState(() => {
+    try {
+      const saved = localStorage.getItem('smart_parking_user');
+      return saved ? JSON.parse(saved) : null;
+    } catch (e) {
+      return null;
+    }
+  }); 
+  const [currentSession, setCurrentSession] = useState(() => {
+    try {
+      const saved = localStorage.getItem('smart_parking_session');
+      return saved ? JSON.parse(saved) : null;
+    } catch (e) {
+      return null;
+    }
+  });
   const [isLoginOpen, setIsLoginOpen] = useState(false);
   const [initialAuthMode, setInitialAuthMode] = useState('customer_login');
   const [isPresentationOpen, setIsPresentationOpen] = useState(false);
@@ -69,10 +88,47 @@ export default function App() {
   const [isSessionHistoryOpen, setIsSessionHistoryOpen] = useState(false);
   const [checkoutTargetSession, setCheckoutTargetSession] = useState(null);
 
-  // Active View Tab inside the System Dashboard
-  // For Admin: 'map' | 'customers' | 'analytics' | 'reports'
-  // For Customer: 'guidance' | 'map' | 'reports'
-  const [activeTab, setActiveTab] = useState('map');
+  // Active View Tab inside the System Dashboard - Persisted across reloads
+  const [activeTab, setActiveTab] = useState(() => {
+    try {
+      return localStorage.getItem('smart_parking_active_tab') || 'map';
+    } catch (e) {
+      return 'map';
+    }
+  });
+
+  // Sync state changes to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('smart_parking_view_mode', viewMode);
+    } catch (e) {}
+  }, [viewMode]);
+
+  useEffect(() => {
+    try {
+      if (currentUser) {
+        localStorage.setItem('smart_parking_user', JSON.stringify(currentUser));
+      } else {
+        localStorage.removeItem('smart_parking_user');
+      }
+    } catch (e) {}
+  }, [currentUser]);
+
+  useEffect(() => {
+    try {
+      if (currentSession) {
+        localStorage.setItem('smart_parking_session', JSON.stringify(currentSession));
+      } else {
+        localStorage.removeItem('smart_parking_session');
+      }
+    } catch (e) {}
+  }, [currentSession]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('smart_parking_active_tab', activeTab);
+    } catch (e) {}
+  }, [activeTab]);
 
   const [isLoading, setIsLoading] = useState(false);
   const [notification, setNotification] = useState(null);
@@ -243,6 +299,12 @@ export default function App() {
     setAssignedSpotId(null);
     setActiveRoute(null);
     setViewMode('landing');
+    try {
+      localStorage.removeItem('smart_parking_user');
+      localStorage.removeItem('smart_parking_session');
+      localStorage.setItem('smart_parking_view_mode', 'landing');
+      localStorage.setItem('smart_parking_active_tab', 'map');
+    } catch (e) {}
     fetchState();
     showNotification('You have been logged out.');
   };
@@ -470,6 +532,8 @@ export default function App() {
         )}
 
         <LandingPage
+          currentUser={currentUser}
+          onLogout={handleLogout}
           onEnterApp={() => {
             if (currentUser) {
               setViewMode('app');
@@ -691,18 +755,19 @@ export default function App() {
             </button>
 
             {/* User Profile Pill & Log Out */}
-            {currentUser && (
+            {currentUser ? (
               <div className="flex items-center gap-2 pl-1">
-                <div className="flex items-center gap-2 px-3 py-1 bg-slate-900 border border-slate-700/80 rounded-xl text-xs">
-                  <div className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-[10px] ${
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-900/90 border border-slate-700/80 rounded-xl text-xs backdrop-blur-sm">
+                  <div className={`relative w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs ${
                     isAdmin ? 'bg-emerald-950 text-emerald-300 border border-emerald-500' : 'bg-cyan-950 text-cyan-300 border border-cyan-500'
                   }`}>
-                    {isAdmin ? '🛡️' : (currentUser.name ? currentUser.name[0] : 'U')}
+                    {isAdmin ? '🛡️' : (currentUser.name ? currentUser.name[0].toUpperCase() : 'U')}
+                    <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-400 ring-2 ring-black" />
                   </div>
                   <div className="text-left hidden sm:block">
                     <div className="font-bold text-white truncate max-w-[110px]">{currentUser.name || 'User'}</div>
                     <div className="text-[10px] text-cyan-400 font-mono">
-                      {isAdmin ? 'Administrator' : `${currentUser.vehiclePlate || 'EV'}`}
+                      {isAdmin ? 'Administrator' : `${currentUser.vehiclePlate || 'EV Driver'}`}
                     </div>
                   </div>
                 </div>
@@ -716,6 +781,18 @@ export default function App() {
                   <LogOut className="w-3.5 h-3.5" />
                 </button>
               </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  setInitialAuthMode('customer_login');
+                  setIsLoginOpen(true);
+                }}
+                className="px-3.5 py-1.5 rounded-xl border border-white/20 bg-white/10 hover:bg-white/20 text-white text-xs font-semibold flex items-center gap-1.5 transition-all"
+              >
+                <User className="w-3.5 h-3.5 text-cyan-400" />
+                <span>Sign In</span>
+              </button>
             )}
 
           </div>

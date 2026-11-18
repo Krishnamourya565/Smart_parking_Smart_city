@@ -27,11 +27,63 @@ import {
   BatteryMedium,
   Award,
   Eye,
-  ChevronDown
+  ChevronDown,
+  User,
+  LogOut
 } from 'lucide-react';
+import Hero3D from './Hero3D';
+import NetworkBackground from './NetworkBackground';
+import SectionDivider from './SectionDivider';
 import { BENCHMARK_METRICS, calculateChargingEstimate, PRICING, formatINR } from '../utils/constants';
 
-export default function LandingPage({ onEnterApp, onOpenLogin, onOpenAdmin }) {
+
+export default function LandingPage({ 
+  onEnterApp, 
+  onOpenLogin, 
+  onOpenAdmin, 
+  spots = [], 
+  currentUser = null, 
+  onLogout = () => {} 
+}) {
+  // Shared network background interactive state
+  const [pulseTrigger, setPulseTrigger] = useState(0);
+  const [networkIntensity, setNetworkIntensity] = useState(1.0);
+
+  // Dynamic live spots synced with parent / backend
+  const [liveSpots, setLiveSpots] = useState(spots && spots.length > 0 ? spots : []);
+
+  useEffect(() => {
+    if (spots && spots.length > 0) {
+      setLiveSpots(spots);
+    } else {
+      fetch('http://localhost:5000/api/spots')
+        .then(res => res.json())
+        .then(data => {
+          if (Array.isArray(data) && data.length > 0) setLiveSpots(data);
+        })
+        .catch(() => {});
+    }
+  }, [spots]);
+
+  // Scroll listener to smoothly adjust network background intensity
+  useEffect(() => {
+    const handleScroll = () => {
+      const scrollY = window.scrollY;
+      const windowHeight = window.innerHeight;
+      // Fade from 1.0 (hero) down to 0.40 as user scrolls through reading content
+      const factor = Math.max(0.40, 1.0 - (scrollY / (windowHeight * 1.5)) * 0.60);
+      setNetworkIntensity(factor);
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  const handleEnterWithShockwave = () => {
+    setPulseTrigger(prev => prev + 1);
+    setTimeout(() => {
+      onEnterApp();
+    }, 300);
+  };
   // -------------------------------------------------------------
   // HERO & FACILITY SIMULATION STATE
   // -------------------------------------------------------------
@@ -113,6 +165,10 @@ export default function LandingPage({ onEnterApp, onOpenLogin, onOpenAdmin }) {
     { id: 'R24', type: 'regular', row: 3, col: 10, status: 'free', name: 'Regular 24', occupant: null }
   ];
 
+    const effectiveSpots = (liveSpots && liveSpots.length > 0) 
+    ? liveSpots.map(s => chaosSimActive && s.id === 'EV02' ? { ...s, status: 'fault' } : s)
+    : previewSpots;
+
   const filteredPreviewSpots = previewSpots.filter(s => {
     if (spotFilter === 'all') return true;
     if (spotFilter === 'available') return s.status === 'free';
@@ -131,12 +187,21 @@ export default function LandingPage({ onEnterApp, onOpenLogin, onOpenAdmin }) {
   };
 
   return (
-    <div className="min-h-screen bg-[#050811] text-slate-100 font-['Plus_Jakarta_Sans',sans-serif] overflow-x-hidden selection:bg-cyan-500/30 selection:text-cyan-200">
+    <div className="relative min-h-screen bg-[#000000] text-slate-100 font-['Plus_Jakarta_Sans',sans-serif] overflow-x-hidden selection:bg-cyan-500/30 selection:text-cyan-200">
+      
+      {/* GLOBAL HIGH-TECH DUAL-COLOR NETWORK BACKGROUND */}
+      <NetworkBackground 
+        fixed 
+        variant="hero" 
+        density={1.0} 
+        intensity={networkIntensity} 
+        pulseTrigger={pulseTrigger} 
+      />
       
       {/* ------------------------------------------------------------- */}
       {/* 1. FLOATING GLASSMORPHISM NAVIGATION BAR */}
       {/* ------------------------------------------------------------- */}
-      <nav className="fixed top-4 left-1/2 -translate-x-1/2 w-[95%] max-w-7xl z-50 glass-panel rounded-2xl px-4 lg:px-6 py-3 shadow-2xl border border-slate-800/80 transition-all">
+      <nav className="fixed top-4 left-1/2 -translate-x-1/2 w-[95%] max-w-7xl z-50 bg-black/60 backdrop-blur-md rounded-2xl px-4 lg:px-6 py-3 shadow-2xl border border-white/12 transition-all">
         <div className="flex items-center justify-between">
           
           {/* Logo Brand */}
@@ -181,22 +246,65 @@ export default function LandingPage({ onEnterApp, onOpenLogin, onOpenAdmin }) {
             </button>
           </div>
 
-          {/* Right Action CTAs */}
+          {/* Right Action CTAs (Supports Logged In User Profile Pill) */}
           <div className="flex items-center gap-2">
-            <button
-              onClick={onOpenLogin}
-              className="px-3.5 py-1.5 rounded-xl border border-slate-700 bg-slate-900/80 hover:bg-slate-800 text-slate-200 text-xs font-semibold transition-all"
-            >
-              Sign In
-            </button>
+            {currentUser ? (
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-black/70 border border-white/15 shadow-inner backdrop-blur-md">
+                  <div className="relative">
+                    <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-cyan-500 to-teal-400 text-slate-950 font-extrabold text-xs flex items-center justify-center shadow">
+                      {currentUser.role === 'admin' ? (
+                        <Shield className="w-3.5 h-3.5 fill-slate-950" />
+                      ) : (
+                        (currentUser.name || currentUser.plate || 'U').charAt(0).toUpperCase()
+                      )}
+                    </div>
+                    <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-400 border border-slate-950 ring-1 ring-emerald-500/50" />
+                  </div>
+                  <div className="text-left hidden sm:block">
+                    <div className="text-xs font-bold text-white leading-tight">
+                      {currentUser.name || currentUser.plate || 'Driver'}
+                    </div>
+                    <div className="text-[10px] font-mono text-cyan-400 uppercase leading-none">
+                      {currentUser.role === 'admin' ? 'SYSTEM ADMIN' : currentUser.plate || 'EV DRIVER'}
+                    </div>
+                  </div>
+                </div>
 
-            <button
-              onClick={onEnterApp}
-              className="px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-500 via-teal-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold text-xs shadow-lg shadow-cyan-500/25 flex items-center gap-1.5 transition-all transform hover:scale-[1.02] active:scale-[0.98]"
-            >
-              <span>Enter Smart Parking</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
+                <button
+                  onClick={handleEnterWithShockwave}
+                  className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-cyan-500 via-teal-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold text-xs shadow-lg shadow-cyan-500/25 flex items-center gap-1.5 transition-all transform hover:scale-[1.02] active:scale-[0.98]"
+                >
+                  <span>Dashboard</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+
+                <button
+                  onClick={onLogout}
+                  title="Sign Out"
+                  className="p-2 rounded-xl border border-white/15 bg-black/70 hover:bg-rose-950/80 hover:border-rose-500/60 text-slate-400 hover:text-rose-300 transition-all backdrop-blur-md"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={onOpenLogin}
+                  className="px-3.5 py-1.5 rounded-xl border border-white/15 bg-black/60 hover:bg-white/10 text-slate-200 text-xs font-semibold transition-all backdrop-blur-md"
+                >
+                  Sign In
+                </button>
+
+                <button
+                  onClick={handleEnterWithShockwave}
+                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-500 via-teal-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold text-xs shadow-lg shadow-cyan-500/25 flex items-center gap-1.5 transition-all transform hover:scale-[1.02] active:scale-[0.98]"
+                >
+                  <span>Enter Smart Parking</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
           </div>
 
         </div>
@@ -244,7 +352,7 @@ export default function LandingPage({ onEnterApp, onOpenLogin, onOpenAdmin }) {
           {/* Hero CTAs */}
           <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
             <button
-              onClick={onEnterApp}
+              onClick={handleEnterWithShockwave}
               className="px-7 py-3.5 bg-gradient-to-r from-cyan-500 via-teal-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-extrabold text-sm rounded-xl shadow-xl shadow-cyan-500/30 flex items-center gap-2 transform hover:scale-[1.03] active:scale-[0.98] transition-all"
             >
               <span>Enter Smart Parking</span>
@@ -276,7 +384,7 @@ export default function LandingPage({ onEnterApp, onOpenLogin, onOpenAdmin }) {
         <div className="relative z-10 w-full max-w-5xl glass-panel-glow rounded-3xl p-5 md:p-8 shadow-2xl overflow-hidden border border-cyan-500/30">
           
           {/* Facility Canvas Header Bar */}
-          <div className="flex flex-wrap items-center justify-between gap-3 pb-4 mb-4 border-b border-slate-800/80">
+          <div className="flex flex-wrap items-center justify-between gap-3 pb-4 mb-4 border-b border-white/10">
             <div className="flex items-center gap-2.5">
               <div className="w-3 h-3 rounded-full bg-cyan-400 animate-ping" />
               <h3 className="text-xs md:text-sm font-bold text-white uppercase tracking-wider font-mono">
@@ -320,136 +428,83 @@ export default function LandingPage({ onEnterApp, onOpenLogin, onOpenAdmin }) {
             </div>
           </div>
 
-          {/* 3D Isometric Viewport */}
-          <div className="relative w-full h-[400px] md:h-[460px] bg-[#070B14] rounded-2xl overflow-hidden border border-slate-800/90 flex items-center justify-center p-4">
-            
-            {/* Ambient Facility Glow Lines */}
-            <div className="absolute inset-0 bg-gradient-to-b from-cyan-950/20 via-transparent to-slate-950/80 pointer-events-none" />
-
-            {/* Dynamic Animated 3D Isometric Grid Container */}
-            <div className={`w-full max-w-3xl transition-transform duration-700 ${
-              cameraMode === 'isometric' ? 'isometric-grid' : 'ortho-grid'
-            }`}>
-              
-              {/* Entrance Gate Gantry */}
-              <div className="flex items-center justify-between pb-3 border-b-2 border-dashed border-cyan-500/60 mb-4 px-2">
-                <div className="flex items-center gap-2">
-                  <div className="px-3 py-1 rounded-lg bg-cyan-950 border border-cyan-400 text-cyan-300 font-mono text-xs font-bold shadow-[0_0_12px_rgba(6,182,212,0.4)] flex items-center gap-1.5">
-                    <Compass className="w-3.5 h-3.5 text-cyan-400 animate-spin" />
-                    ENTRANCE GATE (0, 0)
-                  </div>
-                  <span className="text-[10px] text-slate-500 font-mono hidden sm:inline">
-                    RFID / Optical ALPR Telemetry
-                  </span>
-                </div>
-
-                <div className="px-2.5 py-1 rounded-lg bg-emerald-950/80 border border-emerald-500 text-emerald-300 text-[11px] font-mono font-bold flex items-center gap-1">
-                  <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                  <span>Central Controller Active</span>
-                </div>
-              </div>
-
-              {/* ROW 1: Dedicated 50kW EV Fast Chargers (EV01-EV06) + Express Bays */}
-              <div className="mb-4">
-                <div className="text-[10px] text-cyan-400 font-mono uppercase tracking-wider mb-1 flex items-center gap-1">
-                  <Zap className="w-3 h-3" />
-                  <span>Row 1: High-Speed 50kW EV Charging Hub (EV01–EV06)</span>
-                </div>
-                <div className="grid grid-cols-10 gap-2">
-                  {previewSpots.slice(0, 10).map((spot) => {
-                    const isEV = spot.type === 'ev';
-                    const isTarget = spot.id === 'EV01';
-                    return (
-                      <div
-                        key={spot.id}
-                        className={`relative p-2 rounded-xl border flex flex-col items-center justify-between min-h-[72px] transition-all transform hover:scale-105 ${
-                          spot.status === 'fault'
-                            ? 'bg-rose-950/60 border-rose-500 text-rose-300 ring-1 ring-rose-500'
-                            : isEV
-                              ? spot.status === 'free'
-                                ? 'bg-cyan-950/50 border-cyan-500 text-cyan-200 glow-ev-free'
-                                : spot.status === 'reserved'
-                                  ? 'bg-amber-950/50 border-amber-500 text-amber-200 glow-ev-reserved'
-                                  : 'bg-red-950/40 border-red-500 text-red-200 glow-ev-occupied'
-                              : spot.status === 'free'
-                                ? 'bg-emerald-950/40 border-emerald-500 text-emerald-200 glow-reg-free'
-                                : 'bg-slate-900/60 border-slate-700 text-slate-400'
-                        }`}
-                      >
-                        <div className="w-full flex justify-between text-[9px] font-mono font-bold">
-                          <span>{spot.id}</span>
-                          <span>{isEV ? '⚡' : 'P'}</span>
-                        </div>
-                        <div className="my-0.5">
-                          {spot.status === 'fault' ? (
-                            <AlertTriangle className="w-4 h-4 text-rose-400 animate-bounce" />
-                          ) : isEV ? (
-                            <Zap className={`w-4 h-4 ${spot.status === 'free' ? 'text-cyan-400 animate-pulse' : 'text-red-400'}`} />
-                          ) : (
-                            <Car className="w-4 h-4 text-emerald-400" />
-                          )}
-                        </div>
-                        <span className="text-[8px] font-mono uppercase truncate">
-                          {spot.status}
-                        </span>
-
-                        {/* Target Route Marker Indicator */}
-                        {isTarget && (
-                          <div className="absolute -top-2 -right-1 bg-white text-slate-900 rounded-full p-0.5 shadow-lg animate-bounce">
-                            <MapPin className="w-3 h-3 fill-cyan-500 text-cyan-500" />
-                          </div>
-                        )}
+          {/* 3D Facility Scene Viewport (True 3D Three.js + 2D Web Background) */}
+          <div className="relative w-full h-[460px] md:h-[520px] bg-[#070B14] rounded-2xl overflow-hidden border border-white/15 shadow-2xl">
+            {cameraMode === 'isometric' ? (
+              <Hero3D
+                spots={effectiveSpots}
+                onSelectSpot={(spot) => setSelectedLiveSpot(spot)}
+              />
+            ) : (
+              <div className="relative w-full h-full bg-[#070B14] overflow-auto p-4 flex items-center justify-center">
+                <div className="w-full max-w-3xl ortho-grid">
+                  {/* Entrance Gate Gantry */}
+                  <div className="flex items-center justify-between pb-3 border-b-2 border-dashed border-cyan-500/60 mb-4 px-2">
+                    <div className="flex items-center gap-2">
+                      <div className="px-3 py-1 rounded-lg bg-cyan-950 border border-cyan-400 text-cyan-300 font-mono text-xs font-bold shadow-[0_0_12px_rgba(6,182,212,0.4)] flex items-center gap-1.5">
+                        <Compass className="w-3.5 h-3.5 text-cyan-400 animate-spin" />
+                        ENTRANCE GATE (0, 0)
                       </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Transit Lane Aisle 1 */}
-              <div className="h-4 border-y border-dashed border-slate-800 bg-slate-950/50 flex items-center justify-center text-[9px] text-slate-600 font-mono tracking-widest my-2">
-                ◄── TRANSIT AISLE 1 ──►
-              </div>
-
-              {/* ROW 2: Regular Parking Capacity (R05-R14) */}
-              <div className="mb-2">
-                <div className="grid grid-cols-10 gap-2">
-                  {previewSpots.slice(10, 20).map((spot) => (
-                    <div
-                      key={spot.id}
-                      className={`relative p-2 rounded-xl border flex flex-col items-center justify-between min-h-[64px] ${
-                        spot.status === 'free'
-                          ? 'bg-emerald-950/40 border-emerald-500 text-emerald-200 glow-reg-free'
-                          : 'bg-slate-900/60 border-slate-700 text-slate-400'
-                      }`}
-                    >
-                      <div className="w-full flex justify-between text-[9px] font-mono font-bold">
-                        <span>{spot.id}</span>
-                        <span>P</span>
-                      </div>
-                      <Car className={`w-3.5 h-3.5 ${spot.status === 'free' ? 'text-emerald-400' : 'text-slate-500'}`} />
-                      <span className="text-[8px] font-mono uppercase">{spot.status}</span>
+                      <span className="text-[10px] text-slate-500 font-mono hidden sm:inline">
+                        RFID / Optical ALPR Telemetry
+                      </span>
                     </div>
-                  ))}
+
+                    <div className="px-2.5 py-1 rounded-lg bg-emerald-950/80 border border-emerald-500 text-emerald-300 text-[11px] font-mono font-bold flex items-center gap-1">
+                      <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                      <span>Central Controller Active</span>
+                    </div>
+                  </div>
+
+                  {/* ROW 1: Dedicated 50kW EV Fast Chargers (EV01-EV06) */}
+                  <div className="mb-4">
+                    <div className="text-[10px] text-cyan-400 font-mono uppercase tracking-wider mb-1 flex items-center gap-1">
+                      <Zap className="w-3 h-3" />
+                      <span>Row 1: High-Speed 50kW EV Charging Hub (EV01-EV06)</span>
+                    </div>
+                    <div className="grid grid-cols-10 gap-2">
+                      {effectiveSpots.slice(0, 10).map((spot) => (
+                        <div
+                          key={spot.id}
+                          className={`relative p-2 rounded-xl border flex flex-col items-center justify-between min-h-[64px] ${
+                            spot.status === 'fault'
+                              ? 'bg-rose-950/60 border-rose-500 text-rose-300'
+                              : spot.type === 'ev'
+                                ? spot.status === 'free'
+                                  ? 'bg-cyan-950/50 border-cyan-500 text-cyan-200'
+                                  : 'bg-red-950/40 border-red-500 text-red-200'
+                                : 'bg-slate-900/60 border-slate-700 text-slate-400'
+                          }`}
+                        >
+                          <span className="text-[9px] font-mono font-bold">{spot.id}</span>
+                          <span className="text-[8px] font-mono uppercase">{spot.status}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Transit Aisle */}
+                  <div className="h-4 border-y border-dashed border-slate-800 bg-slate-950/50 flex items-center justify-center text-[9px] text-slate-500 font-mono tracking-widest my-2">
+                    ◄── TRANSIT AISLE 1 ──►
+                  </div>
+
+                  {/* ROW 2: Regular Parking */}
+                  <div>
+                    <div className="grid grid-cols-10 gap-2">
+                      {effectiveSpots.slice(10, 20).map((spot) => (
+                        <div
+                          key={spot.id}
+                          className="relative p-2 rounded-xl border border-slate-700 bg-slate-900/60 flex flex-col items-center justify-between min-h-[60px]"
+                        >
+                          <span className="text-[9px] font-mono font-bold text-slate-300">{spot.id}</span>
+                          <span className="text-[8px] font-mono uppercase text-slate-500">{spot.status}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </div>
-
-            </div>
-
-            {/* Floating Glass HUD Data Tags */}
-            <div className="absolute top-4 right-4 space-y-2 pointer-events-none hidden md:block">
-              <div className="glass-panel px-3 py-1.5 rounded-xl border border-cyan-500/40 text-xs text-cyan-300 font-mono animate-float-hud shadow-lg">
-                <span className="w-2 h-2 rounded-full bg-cyan-400 inline-block mr-1.5 animate-ping" />
-                EV01 — Available (50kW Fast Ready)
-              </div>
-              <div className="glass-panel px-3 py-1.5 rounded-xl border border-red-500/40 text-xs text-red-300 font-mono animate-float-hud shadow-lg" style={{ animationDelay: '1s' }}>
-                <span className="w-2 h-2 rounded-full bg-red-400 inline-block mr-1.5" />
-                EV02 — Charging (78% • 18 mins left)
-              </div>
-              <div className="glass-panel px-3 py-1.5 rounded-xl border border-emerald-500/40 text-xs text-emerald-300 font-mono animate-float-hud shadow-lg" style={{ animationDelay: '2s' }}>
-                <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block mr-1.5" />
-                R14 — Occupied (Direct Guidance 1.00)
-              </div>
-            </div>
+            )}
 
             {/* Bottom Floating Telemetry Overlay */}
             <div className="absolute bottom-3 left-4 right-4 flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono text-slate-300 glass-panel px-4 py-2 rounded-xl border border-slate-800">
@@ -467,7 +522,7 @@ export default function LandingPage({ onEnterApp, onOpenLogin, onOpenAdmin }) {
           </div>
 
           {/* Interactive Simulation Controls Under Hero */}
-          <div className="mt-4 pt-3 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-3 text-xs">
+          <div className="mt-4 pt-3 border-t border-white/10 flex flex-wrap items-center justify-between gap-3 text-xs">
             <div className="flex items-center gap-2">
               <span className="text-slate-400 font-semibold">Simulated Vehicle Dispatch:</span>
               <button
@@ -506,7 +561,8 @@ export default function LandingPage({ onEnterApp, onOpenLogin, onOpenAdmin }) {
       {/* ------------------------------------------------------------- */}
       {/* 3. FACILITY TRANSIT JOURNEY TIMELINE */}
       {/* ------------------------------------------------------------- */}
-      <section id="journey" className="py-12 px-4 lg:px-8 border-y border-slate-800/80 bg-slate-950/60">
+      <SectionDivider number="02" label="URBAN TRANSIT PIPELINE" subtitle="COORDINATED FLOW ARCHITECTURE" glowColor="cyan" />
+      <section id="journey" className="py-12 px-4 lg:px-8 border-y border-white/10 bg-black/60 backdrop-blur-md">
         <div className="max-w-7xl mx-auto">
           
           <div className="text-center mb-8">
@@ -574,6 +630,7 @@ export default function LandingPage({ onEnterApp, onOpenLogin, onOpenAdmin }) {
       {/* ------------------------------------------------------------- */}
       {/* 4. SECTION 2 — LIVE PARKING ("See Every Spot. In Real Time.") */}
       {/* ------------------------------------------------------------- */}
+      <SectionDivider number="03" label="LIVE GRID MATRIX" subtitle="30-BAY SPATIAL TELEMETRY" glowColor="emerald" />
       <section id="live-parking" className="py-20 px-4 lg:px-8 max-w-7xl mx-auto space-y-8">
         
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
@@ -711,7 +768,7 @@ export default function LandingPage({ onEnterApp, onOpenLogin, onOpenAdmin }) {
 
               <div className="flex items-center gap-2">
                 <button
-                  onClick={onEnterApp}
+                  onClick={handleEnterWithShockwave}
                   className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold rounded-xl shadow-md shadow-cyan-600/20"
                 >
                   Reserve / Park in Bay {selectedLiveSpot.id}
@@ -733,7 +790,8 @@ export default function LandingPage({ onEnterApp, onOpenLogin, onOpenAdmin }) {
       {/* ------------------------------------------------------------- */}
       {/* 5. SECTION 3 — SMART DRIVER GUIDANCE ("From Gate to Spot") */}
       {/* ------------------------------------------------------------- */}
-      <section id="driver-guidance" className="py-20 px-4 lg:px-8 border-t border-slate-800/80 bg-slate-950/40">
+      <SectionDivider number="04" label="PRECISION WAYFINDING" subtitle="ZERO-CRUISING INGRESS GUIDANCE" glowColor="cyan" />
+      <section id="driver-guidance" className="py-20 px-4 lg:px-8 border-t border-white/10 bg-black/50 backdrop-blur-md">
         <div className="max-w-7xl mx-auto space-y-8">
           
           <div>
@@ -841,7 +899,7 @@ export default function LandingPage({ onEnterApp, onOpenLogin, onOpenAdmin }) {
               </div>
 
               <button
-                onClick={onEnterApp}
+                onClick={handleEnterWithShockwave}
                 className="w-full py-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 text-white font-bold text-xs rounded-xl shadow-lg shadow-cyan-500/25 flex items-center justify-center gap-2"
               >
                 <span>Launch Driver Cockpit in Full App</span>
@@ -858,6 +916,7 @@ export default function LandingPage({ onEnterApp, onOpenLogin, onOpenAdmin }) {
       {/* ------------------------------------------------------------- */}
       {/* 6. SECTION 4 — EV CHARGING ("Charge Smarter.") */}
       {/* ------------------------------------------------------------- */}
+      <SectionDivider number="05" label="50kW EV FAST CHARGING" subtitle="PRIORITY POWER DISTRIBUTION" glowColor="cyan" />
       <section id="ev-charging" className="py-20 px-4 lg:px-8 max-w-7xl mx-auto space-y-8">
         
         <div>
@@ -987,7 +1046,7 @@ export default function LandingPage({ onEnterApp, onOpenLogin, onOpenAdmin }) {
             </div>
 
             <button
-              onClick={onEnterApp}
+              onClick={handleEnterWithShockwave}
               className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl border border-slate-700"
             >
               Book 50kW Charger in App
@@ -1001,7 +1060,8 @@ export default function LandingPage({ onEnterApp, onOpenLogin, onOpenAdmin }) {
       {/* ------------------------------------------------------------- */}
       {/* 7. SECTION 5 — INCIDENT REPORTS ("Problems Reported. Resolved.") */}
       {/* ------------------------------------------------------------- */}
-      <section id="incident-reports" className="py-20 px-4 lg:px-8 border-t border-slate-800/80 bg-slate-950/60">
+      <SectionDivider number="06" label="INCIDENT RESOLUTION HUB" subtitle="AUTOMATED FAULT RECOVERY" glowColor="amber" />
+      <section id="incident-reports" className="py-20 px-4 lg:px-8 border-t border-white/10 bg-black/60 backdrop-blur-md">
         <div className="max-w-7xl mx-auto space-y-8">
           
           <div>
@@ -1100,6 +1160,7 @@ export default function LandingPage({ onEnterApp, onOpenLogin, onOpenAdmin }) {
       {/* ------------------------------------------------------------- */}
       {/* 8. SECTION 6 — URBAN IMPACT & BENCHMARK HIGHLIGHTS */}
       {/* ------------------------------------------------------------- */}
+      <SectionDivider number="07" label="EMPIRICAL BENCHMARKS" subtitle="MACRO URBAN IMPACT" glowColor="emerald" />
       <section id="urban-impact" className="py-20 px-4 lg:px-8 max-w-7xl mx-auto space-y-8">
         
         <div className="text-center max-w-3xl mx-auto space-y-3">
@@ -1166,7 +1227,7 @@ export default function LandingPage({ onEnterApp, onOpenLogin, onOpenAdmin }) {
           </div>
 
           <button
-            onClick={onEnterApp}
+            onClick={handleEnterWithShockwave}
             className="px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-emerald-500/25 shrink-0"
           >
             Launch System Dashboard
@@ -1178,7 +1239,8 @@ export default function LandingPage({ onEnterApp, onOpenLogin, onOpenAdmin }) {
       {/* ------------------------------------------------------------- */}
       {/* 9. CONVERSION FOOTER CTA */}
       {/* ------------------------------------------------------------- */}
-      <footer className="border-t border-slate-800 bg-[#070B14] py-16 px-4 lg:px-8 text-slate-400 text-xs">
+      <SectionDivider number="08" label="SYSTEM ONBOARDING" subtitle="PRODUCTION REPOSITORY ACCESS" glowColor="blue" />
+      <footer className="border-t border-white/10 bg-[#070B14] py-16 px-4 lg:px-8 text-slate-400 text-xs">
         <div className="max-w-7xl mx-auto space-y-12">
           
           <div className="glass-panel p-8 md:p-12 rounded-3xl text-center space-y-6 border border-cyan-500/40 shadow-2xl relative overflow-hidden">
@@ -1193,7 +1255,7 @@ export default function LandingPage({ onEnterApp, onOpenLogin, onOpenAdmin }) {
 
             <div className="flex flex-wrap items-center justify-center gap-4">
               <button
-                onClick={onEnterApp}
+                onClick={handleEnterWithShockwave}
                 className="px-8 py-4 bg-gradient-to-r from-cyan-500 via-teal-500 to-blue-600 hover:from-cyan-400 text-white font-extrabold text-sm rounded-xl shadow-xl shadow-cyan-500/25 flex items-center gap-2"
               >
                 <span>Enter Smart Parking Portal</span>
@@ -1210,7 +1272,7 @@ export default function LandingPage({ onEnterApp, onOpenLogin, onOpenAdmin }) {
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-slate-800/80 pt-6">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-white/10 pt-6">
             <div className="flex items-center gap-2">
               <Zap className="w-4 h-4 text-cyan-400" />
               <span className="font-bold text-white">Organized Urban Systems</span>
