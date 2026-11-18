@@ -415,7 +415,7 @@ export default function LoginModal({
           </div>
           <div>
             <h2 className="text-xl font-black text-white tracking-tight">
-              Organized Urban Systems
+              Smart City Mobility
             </h2>
             <p className="text-xs text-slate-400 font-mono">
               Smart Parking & Priority EV Allocation

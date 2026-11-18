@@ -610,14 +610,14 @@ export default function App() {
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-sm md:text-base font-bold text-white tracking-tight">
-                  Organized Urban Systems
+                  Smart City Mobility
                 </h1>
                 <span className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-cyan-950 text-cyan-300 border border-cyan-800">
                   {isAdmin ? 'ADMIN CONTROL' : 'CUSTOMER PORTAL'}
                 </span>
               </div>
               <p className="text-[11px] text-slate-400">
-                Department of Computer Engineering • IDEA Lab 2026
+                Real-Time EV Allocation & Smart Parking Infrastructure
               </p>
             </div>
           </div>
@@ -1013,8 +1013,8 @@ export default function App() {
       {/* Footer */}
       <footer className="bg-[#0B1120] border-t border-slate-800/80 py-5 px-4 text-xs text-slate-500 text-center">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
-          <span>Organized Urban Systems: Software-Driven Smart Parking & Priority EV Allocation</span>
-          <span>IDEA Lab • Dept. of Computer Engineering • Benchmark: 150 Vehicles</span>
+          <span>Smart City Mobility: Software-Driven Smart Parking & Priority EV Allocation</span>
+          <span>Intelligent Urban Infrastructure • Real-Time Allocation System</span>
         </div>
       </footer>
 
