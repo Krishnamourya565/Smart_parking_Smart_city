@@ -120,8 +120,8 @@ function HighTechGateGantry({ position, rotation = [0, 0, 0], label, sublabel, i
       </mesh>
       {/* Glowing Signface text/glyphs */}
       <Html position={[0, 4.15, 0.27]} center transform distanceFactor={20}>
-        <div className="px-3 py-1 rounded bg-black/90 border border-white/20 text-center select-none pointer-events-none whitespace-nowrap">
-          <div className="text-[11px] font-mono font-black tracking-widest flex items-center gap-1.5" style={{ color: accentColor }}>
+        <div className="pl-4 pr-3 py-1 rounded bg-black/90 border border-white/20 text-center select-none pointer-events-none max-w-xs">
+          <div className="text-xs sm:text-sm font-mono font-black tracking-widest flex items-center gap-1.5" style={{ color: accentColor }}>
             <span>{isExit ? '◀ EGRESS 01' : '▶ INGRESS 01'}</span>
             <span className="text-white/60">///</span>
             <span>{isExit ? 'AUTOMATED CHECKOUT CLEAR' : 'SMART ALPR ACTIVE'}</span>
@@ -209,9 +209,9 @@ function HighTechGateGantry({ position, rotation = [0, 0, 0], label, sublabel, i
 
       {/* 8. Single Crisp HUD Label */}
       <Html position={[0, 5.2, 0]} center distanceFactor={28}>
-        <div className="pointer-events-none select-none flex flex-col items-center">
-          <div className="px-4 py-1.5 rounded-full bg-black/95 border border-white/25 text-white font-mono text-xs font-black tracking-wider shadow-[0_0_20px_rgba(0,0,0,0.9)] backdrop-blur-xl whitespace-nowrap flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full inline-block animate-ping" style={{ backgroundColor: accentColor }} />
+        <div className="pointer-events-none select-none flex flex-col items-center pl-6 max-w-xs">
+          <div className="px-4 py-1.5 rounded-full bg-black/95 border border-white/25 text-white font-mono text-xs sm:text-sm font-black tracking-wider shadow-[0_0_20px_rgba(0,0,0,0.9)] backdrop-blur-xl whitespace-nowrap flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full inline-block animate-ping shrink-0" style={{ backgroundColor: accentColor }} />
             <span>{label}</span>
           </div>
           {sublabel && (
@@ -902,7 +902,7 @@ export default function Facility3DView({
   }, [onSpotSelect]);
 
   return (
-    <div className={`relative w-full h-[540px] bg-black rounded-2xl overflow-hidden border border-white/15 shadow-2xl ${className}`}>
+    <div className={`relative w-full h-[540px] bg-black rounded-2xl overflow-hidden pb-16 border border-white/15 shadow-2xl ${className}`}>
       
       {/* 1. LAYER 0: 2D Clear Web Networking Background Image for the Parking Station */}
       <div 
@@ -1161,31 +1161,31 @@ export default function Facility3DView({
       )}
 
       {/* 5. LAYER 4: Big Readable Status Legend (Matching Exact Colors) */}
-      <div className="absolute bottom-3 left-4 right-4 flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 rounded-xl bg-black/85 border border-white/20 backdrop-blur-md text-xs font-mono text-zinc-300 pointer-events-auto z-10 shadow-2xl">
-        <div className="flex flex-wrap items-center gap-4">
+      <div className="absolute bottom-3 left-3 right-3 max-w-full overflow-hidden flex flex-col items-center justify-center gap-1.5 px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl bg-black/85 border border-white/20 backdrop-blur-md font-mono text-zinc-300 pointer-events-auto z-10 shadow-2xl">
+        <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-xs sm:text-sm">
           <div className="flex items-center gap-1.5">
-            <span className="w-3 h-3 rounded-full" style={{ backgroundColor: STATUS_COLORS.free }} />
-            <span className="text-white font-bold">Free (#00D98B)</span>
+            <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: STATUS_COLORS.free }} />
+            <span className="text-white font-bold">Free</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="w-3 h-3 rounded-full" style={{ backgroundColor: STATUS_COLORS.charging }} />
-            <span className="text-white font-bold">EV Charging (#06B6D4)</span>
+            <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: STATUS_COLORS.charging }} />
+            <span className="text-white font-bold">EV Charging</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="w-3 h-3 rounded-full" style={{ backgroundColor: STATUS_COLORS.occupied }} />
-            <span className="text-white font-bold">Occupied (#EF4444)</span>
+            <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: STATUS_COLORS.occupied }} />
+            <span className="text-white font-bold">Occupied</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="w-3 h-3 rounded-full" style={{ backgroundColor: STATUS_COLORS.reserved }} />
-            <span className="text-white font-bold">Reserved (#F59E0B)</span>
+            <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: STATUS_COLORS.reserved }} />
+            <span className="text-white font-bold">Reserved</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="w-3 h-3 rounded-full" style={{ backgroundColor: STATUS_COLORS.faulty }} />
-            <span className="text-white font-bold">Faulty (#A855F7)</span>
+            <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: STATUS_COLORS.faulty }} />
+            <span className="text-white font-bold">Faulty</span>
           </div>
         </div>
 
-        <div className="text-[11px] text-zinc-400 hidden lg:block font-bold">
+        <div className="text-[11px] text-zinc-400 hidden sm:block font-bold text-center">
           Click Bay to Inspect • Drag to Orbit • Scroll to Zoom
         </div>
       </div>

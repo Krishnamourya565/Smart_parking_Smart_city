@@ -522,7 +522,7 @@ export default function LandingPage({
           </div>
 
           {/* Interactive Simulation Controls Under Hero */}
-          <div className="mt-4 pt-3 border-t border-white/10 flex flex-wrap items-center justify-between gap-3 text-xs">
+          <div className="mt-4 pt-3 border-t border-white/10 flex flex-wrap items-center gap-3 text-xs">
             <div className="flex items-center gap-2">
               <span className="text-slate-400 font-semibold">Simulated Vehicle Dispatch:</span>
               <button
