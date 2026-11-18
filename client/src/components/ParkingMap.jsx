@@ -452,7 +452,7 @@ export default function ParkingMap({
         )}
 
         {/* Leaflet Map Viewport Container with strict z-index constraints */}
-        <div className={`relative w-full overflow-hidden z-0 ${isFullscreen ? 'flex-1 h-full' : 'h-[380px] md:h-[440px]'}`}>
+        <div className={`relative w-full overflow-hidden z-0 ${isFullscreen ? 'flex-1 h-full' : 'h-[60dvh] md:h-[460px]'}`}>
           <div ref={mapContainerRef} className="w-full h-full bg-[#070B14]" />
         </div>
 

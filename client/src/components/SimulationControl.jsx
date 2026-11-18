@@ -40,7 +40,7 @@ export default function SimulationControl({
     <div className="bg-[#0B1120] border border-slate-800 rounded-2xl p-5 shadow-xl space-y-5">
       {/* Panel Header */}
       <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
           <Cpu className="w-5 h-5 text-cyan-400" />
           <h3 className="text-base font-bold text-white tracking-tight">
             Central Controller & Simulation Testing Lab
@@ -57,7 +57,7 @@ export default function SimulationControl({
         <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
           Allocation Engine Protocol
         </label>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {/* Smart Organized Option */}
           <button
             type="button"
@@ -113,7 +113,7 @@ export default function SimulationControl({
       {/* ------------------------------------------------------------- */}
       <div className="p-4 bg-gradient-to-r from-[#0F172A] to-slate-900 border-2 border-amber-500/40 rounded-2xl space-y-3">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
             <div className="p-1.5 bg-amber-500 text-slate-950 rounded-lg font-bold">
               <Navigation className="w-4 h-4" />
             </div>
@@ -154,12 +154,12 @@ export default function SimulationControl({
                 key={sess.id}
                 className="p-3 bg-slate-950/80 border border-slate-800 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-2.5"
               >
-                <div className="flex items-center gap-3">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
                   <div className="w-8 h-8 rounded-lg bg-amber-950 text-amber-300 border border-amber-600 flex items-center justify-center font-bold text-xs">
                     {sess.spotId}
                   </div>
                   <div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                       <span className="font-bold text-white text-xs">{sess.vehiclePlate}</span>
                       <span className="text-[10px] font-mono text-cyan-400">#{sess.id}</span>
                       <span className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-amber-950 text-amber-300 border border-amber-700">
@@ -207,7 +207,7 @@ export default function SimulationControl({
 
           {/* Battery */}
           {singleVehicleType === 'EV' ? (
-            <div className="flex items-center gap-2 bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5">
               <span className="text-[11px] text-slate-400">Bat:</span>
               <input
                 type="number"

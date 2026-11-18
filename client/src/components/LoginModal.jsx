@@ -23,446 +23,478 @@ import {
   Eye,
   EyeOff
 } from 'lucide-react';
-import { calculateChargingEstimate } from '../utils/constants';
+import { supabase } from '../supabase';
 
 export default function LoginModal({ 
   isOpen, 
   onClose, 
-  initialAuthMode = 'customer_login',
+  initialAuthMode = 'login',
   activeUsers, 
   onCustomerLogin,
   onCustomerRegister,
-  onAdminLogin,
-  onGuestDriverLogin 
+  onAdminLogin
 }) {
-  const [authMode, setAuthMode] = useState(initialAuthMode); // 'customer_login' | 'customer_register' | 'admin_login'
+  // Mode: 'login' (Sign In for both User and Admin) or 'register' (Sign Up for Users only)
+  const [authMode, setAuthMode] = useState('login');
 
   useEffect(() => {
     if (isOpen) {
-      setAuthMode(initialAuthMode || 'customer_login');
+      setAuthMode(initialAuthMode === 'customer_register' ? 'register' : 'login');
       setErrorMessage('');
     }
   }, [isOpen, initialAuthMode]);
   
-  // Customer Login Form State
-  const [customerIdentifier, setCustomerIdentifier] = useState('');
-  const [customerPassword, setCustomerPassword] = useState('');
+  // Sign In Form State (User and Admin)
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
   const [showLoginPassword, setShowLoginPassword] = useState(false);
 
-  // Customer Register Form State
+  // Sign Up Form State (User Only - No Admin Option)
   const [regName, setRegName] = useState('');
   const [regEmail, setRegEmail] = useState('');
   const [regPhone, setRegPhone] = useState('');
   const [regPlate, setRegPlate] = useState('');
   const [regType, setRegType] = useState('EV');
-  const [regBattery, setRegBattery] = useState(18);
+  const [regBattery, setRegBattery] = useState(25);
   const [regPassword, setRegPassword] = useState('');
   const [showRegPassword, setShowRegPassword] = useState(false);
 
-  // Admin Form State
-  const [adminPasscode, setAdminPasscode] = useState('admin123');
-  const [showAdminPassword, setShowAdminPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   if (!isOpen) return null;
 
-  const handleCustomerLoginSubmit = async (e) => {
+  // Unified Sign In: Validates with Supabase Auth, determines role from profiles.role
+  const handleSignInSubmit = async (e) => {
     e.preventDefault();
     setErrorMessage('');
     setIsSubmitting(true);
+
     try {
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          identifier: customerIdentifier.trim(),
-          password: customerPassword,
-          role: 'customer'
-        })
-      });
-      const data = await res.json();
-      if (data.success) {
-        onCustomerLogin(data.user, data.session);
+      const email = loginEmail.trim();
+      const password = loginPassword;
+
+      // 1. Supabase Auth Sign In
+      let authUser = null;
+      let authSession = null;
+      let userRole = 'user';
+      let userProfile = null;
+
+      if (supabase) {
+        const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+          email,
+          password
+        });
+
+        if (!authError && authData?.user) {
+          authUser = authData.user;
+          authSession = authData.session;
+
+          // Query role from profiles table
+          try {
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('*')
+              .eq('id', authUser.id)
+              .maybeSingle();
+
+            if (profile) {
+              userProfile = profile;
+              userRole = profile.role || 'user';
+            } else {
+              // Fallback lookup by email
+              const { data: emailProfile } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('email', email)
+                .maybeSingle();
+              if (emailProfile) {
+                userProfile = emailProfile;
+                userRole = emailProfile.role || 'user';
+              }
+            }
+          } catch (pErr) {
+            console.warn('Profile fetch error, defaulting role:', pErr);
+          }
+        } else if (authError) {
+          // If Supabase direct fails, try backend auth fallback
+          const fallbackRes = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ identifier: email, password })
+          });
+          const fallbackData = await fallbackRes.json();
+          if (fallbackData.success) {
+            authUser = fallbackData.user;
+            authSession = fallbackData.session;
+            userRole = fallbackData.user?.role || 'user';
+          } else {
+            throw new Error(authError.message || fallbackData.message || 'Invalid email or password.');
+          }
+        }
       } else {
-        setErrorMessage(data.message || 'Login failed. Please check your credentials.');
+        // Direct fallback
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ identifier: email, password })
+        });
+        const data = await res.json();
+        if (data.success) {
+          authUser = data.user;
+          authSession = data.session;
+          userRole = data.user?.role || 'user';
+        } else {
+          throw new Error(data.message || 'Login failed.');
+        }
+      }
+
+      if (!authUser) {
+        throw new Error('Authentication failed. Check your email and password.');
+      }
+
+      const mergedUser = {
+        id: authUser.id,
+        email: authUser.email || email,
+        name: userProfile?.name || authUser.user_metadata?.name || email.split('@')[0],
+        vehiclePlate: userProfile?.vehicle_plate || authUser.user_metadata?.vehicle_plate || 'MH12-EV-2026',
+        vehicleType: userProfile?.vehicle_type || authUser.user_metadata?.vehicle_type || 'EV',
+        batteryLevel: userProfile?.battery_level || 75,
+        role: userRole
+      };
+
+      if (userRole === 'admin') {
+        onAdminLogin(mergedUser, authSession);
+      } else {
+        onCustomerLogin(mergedUser, authSession);
       }
     } catch (err) {
-      setErrorMessage('Failed to connect to authentication service.');
+      setErrorMessage(err.message || 'Login failed. Please check your credentials.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleCustomerRegisterSubmit = async (e) => {
+  // Sign Up Submit: Standard User Only (No Admin Option)
+  const handleSignUpSubmit = async (e) => {
     e.preventDefault();
     setErrorMessage('');
 
-    // Strict Indian Phone Validation: exactly 10 digits
     const cleanPhoneDigits = regPhone.replace(/\D/g, '');
     if (cleanPhoneDigits.length !== 10) {
-      setErrorMessage('Please enter a valid 10-digit Indian phone number (+91).');
+      setErrorMessage('Please enter a valid 10-digit phone number.');
       return;
     }
 
     setIsSubmitting(true);
     try {
-      const res = await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: regName.trim(),
-          email: regEmail.trim(),
-          phone: `+91 ${cleanPhoneDigits}`,
-          vehiclePlate: regPlate.trim().toUpperCase(),
-          vehicleType: regType,
-          batteryLevel: regType === 'EV' ? regBattery : null,
-          password: regPassword
-        })
-      });
-      const data = await res.json();
-      if (data.success) {
-        onCustomerRegister(data.user, data.session);
-      } else {
-        setErrorMessage(data.message || 'Registration failed.');
-      }
-    } catch (err) {
-      setErrorMessage('Failed to connect to registration service.');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+      const email = regEmail.trim();
+      const password = regPassword;
+      const name = regName.trim();
+      const vehiclePlate = regPlate.trim().toUpperCase();
 
-  const handleAdminSubmit = async (e) => {
-    e.preventDefault();
-    setErrorMessage('');
-    setIsSubmitting(true);
-    try {
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          identifier: 'admin',
-          password: adminPasscode,
-          role: 'admin'
-        })
-      });
-      const data = await res.json();
-      if (data.success) {
-        onAdminLogin(data.user, data.session);
-      } else {
-        setErrorMessage(data.message || 'Invalid admin passcode.');
+      let createdUser = null;
+      let createdSession = null;
+
+      if (supabase) {
+        const { data: authData, error: authError } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              name,
+              vehicle_plate: vehiclePlate,
+              vehicle_type: regType,
+              phone: `+91 ${cleanPhoneDigits}`
+            }
+          }
+        });
+
+        if (authError) {
+          // Fallback to backend registration
+          const fallbackRes = await fetch('/api/auth/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              name,
+              email,
+              phone: `+91 ${cleanPhoneDigits}`,
+              vehiclePlate,
+              vehicleType: regType,
+              batteryLevel: regType === 'EV' ? regBattery : null,
+              password
+            })
+          });
+          const fallbackData = await fallbackRes.json();
+          if (fallbackData.success) {
+            createdUser = fallbackData.user;
+            createdSession = fallbackData.session;
+          } else {
+            throw new Error(authError.message || fallbackData.message || 'Registration failed.');
+          }
+        } else if (authData?.user) {
+          createdUser = authData.user;
+          createdSession = authData.session;
+
+          // Insert or update profiles with strict role 'user'
+          try {
+            await supabase.from('profiles').upsert({
+              id: authData.user.id,
+              name,
+              email,
+              vehicle_plate: vehiclePlate,
+              vehicle_type: regType,
+              phone: `+91 ${cleanPhoneDigits}`,
+              role: 'user',
+              updated_at: new Date().toISOString()
+            });
+          } catch (profErr) {
+            console.warn('Profile creation log:', profErr);
+          }
+        }
       }
+
+      if (!createdUser) {
+        throw new Error('Registration failed. Please try again.');
+      }
+
+      const mergedUser = {
+        id: createdUser.id,
+        email,
+        name,
+        vehiclePlate,
+        vehicleType: regType,
+        batteryLevel: regType === 'EV' ? regBattery : null,
+        role: 'user'
+      };
+
+      onCustomerRegister(mergedUser, createdSession);
     } catch (err) {
-      setErrorMessage('Failed to authenticate admin.');
+      setErrorMessage(err.message || 'Registration failed.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <div 
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md transition-all animate-fade-in"
-      onClick={onClose}
-    >
-      {/* Animated SVG Background */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-20">
-        <svg className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <pattern id="grid-pattern" width="60" height="60" patternUnits="userSpaceOnUse">
-              <path d="M 60 0 L 0 0 0 60" fill="none" stroke="#1E293B" strokeWidth="1" />
-              <circle cx="30" cy="30" r="1.5" fill="#06B6D4" opacity="0.6" />
-              <circle cx="15" cy="45" r="1" fill="#10B981" opacity="0.5" />
-            </pattern>
-          </defs>
-          <rect width="100%" height="100%" fill="url(#grid-pattern)" />
-        </svg>
-      </div>
-
-      {/* Main Modal Card */}
-      <div 
-        className="relative w-full max-w-xl bg-[#0B1120] border border-slate-800 rounded-2xl shadow-2xl overflow-hidden text-slate-200 z-10"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-slate-950/90 backdrop-blur-md overflow-y-auto min-h-dvh">
+      <div className="relative w-full max-w-lg min-h-dvh sm:min-h-0 bg-[#070B14] sm:border sm:border-cyan-500/40 sm:rounded-3xl p-5 sm:p-8 shadow-2xl overflow-y-auto flex flex-col justify-center my-auto">
         
-        {/* Top Glowing Header Accent */}
-        <div className="h-1.5 w-full bg-gradient-to-r from-cyan-500 via-emerald-500 to-cyan-500 animate-pulse" />
+        {/* Glow ambient accent */}
+        <div className="absolute top-0 right-0 w-64 h-64 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute bottom-0 left-0 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
 
-        <div className="p-6 md:p-8">
-          
-          {/* Header Title & Close / Cancel Button */}
-          <div className="flex items-start justify-between mb-5">
+        {/* Modal Close Button */}
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-colors z-20"
+        >
+          <X className="w-5 h-5" />
+        </button>
+
+        {/* Header */}
+        <div className="flex items-center gap-3 mb-6">
+          <div className="p-2.5 rounded-2xl bg-gradient-to-tr from-cyan-500 to-teal-400 text-slate-950 shadow-lg shadow-cyan-500/25">
+            <Zap className="w-6 h-6 fill-slate-950" />
+          </div>
+          <div>
+            <h2 className="text-xl font-black text-white tracking-tight">
+              Organized Urban Systems
+            </h2>
+            <p className="text-xs text-slate-400 font-mono">
+              Smart Parking & Priority EV Allocation
+            </p>
+          </div>
+        </div>
+
+        {/* Auth Mode Toggle Tabs (Sign In vs Sign Up - No Admin Tab) */}
+        <div className="grid grid-cols-2 p-1 mb-6 bg-slate-900/90 border border-slate-800 rounded-xl text-xs font-semibold">
+          <button
+            type="button"
+            onClick={() => { setAuthMode('login'); setErrorMessage(''); }}
+            className={`min-h-[44px] py-2 rounded-lg transition-all flex items-center justify-center gap-1.5 text-sm ${
+              authMode === 'login' ? 'bg-cyan-600 text-white shadow' : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <LogIn className="w-3.5 h-3.5" />
+            <span>Sign In</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => { setAuthMode('register'); setErrorMessage(''); }}
+            className={`min-h-[44px] py-2 rounded-lg transition-all flex items-center justify-center gap-1.5 text-sm ${
+              authMode === 'register' ? 'bg-cyan-600 text-white shadow' : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <UserPlus className="w-3.5 h-3.5" />
+            <span>Sign Up (Drivers)</span>
+          </button>
+        </div>
+
+        {/* Error Alert Box */}
+        {errorMessage && (
+          <div className="mb-4 p-3 rounded-xl bg-rose-950/70 border border-rose-500/80 text-rose-300 text-xs flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span>{errorMessage}</span>
+          </div>
+        )}
+
+        {/* 1. SIGN IN FORM (User and Admin) */}
+        {authMode === 'login' && (
+          <form onSubmit={handleSignInSubmit} className="space-y-4">
             <div>
-              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-cyan-400 mb-1">
-                <span className="inline-block w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
-                IDEA Lab Smart Urban System
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                Email Address
+              </label>
+              <div className="relative">
+                <Mail className="absolute left-3.5 top-3 w-4 h-4 text-slate-500" />
+                <input
+                  type="email"
+                  required
+                  value={loginEmail}
+                  onChange={(e) => setLoginEmail(e.target.value)}
+                  placeholder="driver@example.com or admin@urban.gov"
+                  className="w-full min-h-[44px] pl-10 pr-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-base text-white placeholder-slate-500 focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 transition-colors"
+                />
               </div>
-              <h2 className="text-2xl font-bold text-white tracking-tight">
-                Urban Resource Access Portal
-              </h2>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 bg-slate-900 border border-slate-700/60 rounded-full text-xs text-slate-300">
-                <Users className="w-3.5 h-3.5 text-cyan-400" />
-                <span>{activeUsers?.totalLoggedIn || 3} Active</span>
-              </div>
-              <button
-                type="button"
-                onClick={onClose}
-                className="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-slate-400 hover:text-white transition-all shadow-sm group"
-                title="Cancel and return to Landing Page"
-                aria-label="Close"
-              >
-                <X className="w-5 h-5 group-hover:rotate-90 transition-transform duration-200" />
-              </button>
-            </div>
-          </div>
 
-          {/* Three-Way Mode Navigation Bar */}
-          <div className="grid grid-cols-3 p-1 bg-slate-900/90 border border-slate-800 rounded-xl mb-5 text-xs font-semibold">
-            <button
-              type="button"
-              onClick={() => { setAuthMode('customer_login'); setErrorMessage(''); }}
-              className={`flex items-center justify-center gap-1.5 py-2.5 rounded-lg transition-all ${
-                authMode === 'customer_login'
-                  ? 'bg-gradient-to-r from-cyan-600 to-cyan-500 text-white shadow-md shadow-cyan-500/20 font-bold'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <LogIn className="w-3.5 h-3.5" />
-              <span>Driver Sign In</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => { setAuthMode('customer_register'); setErrorMessage(''); }}
-              className={`flex items-center justify-center gap-1.5 py-2.5 rounded-lg transition-all ${
-                authMode === 'customer_register'
-                  ? 'bg-gradient-to-r from-teal-600 to-emerald-600 text-white shadow-md shadow-emerald-500/20 font-bold'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <UserPlus className="w-3.5 h-3.5" />
-              <span>Register</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => { setAuthMode('admin_login'); setErrorMessage(''); }}
-              className={`flex items-center justify-center gap-1.5 py-2.5 rounded-lg transition-all ${
-                authMode === 'admin_login'
-                  ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md shadow-emerald-500/20 font-bold'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <Shield className="w-3.5 h-3.5" />
-              <span>Admin Console</span>
-            </button>
-          </div>
-
-          {/* Error Message Alert */}
-          {errorMessage && (
-            <div className="mb-4 p-3 bg-rose-950/70 border border-rose-600/80 rounded-xl text-xs text-rose-300 flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
-              <span>{errorMessage}</span>
-            </div>
-          )}
-
-          {/* ------------------------------------------------------------- */}
-          {/* TAB 1: DRIVER / CUSTOMER SIGN IN */}
-          {/* ------------------------------------------------------------- */}
-          {authMode === 'customer_login' && (
-            <form onSubmit={handleCustomerLoginSubmit} className="space-y-4">
-              
-              {/* Registration Prompt for New Drivers */}
-              <div className="p-3 bg-slate-900/60 border border-slate-800 rounded-xl flex items-center justify-between text-xs">
-                <div>
-                  <div className="text-white font-medium">New to Smart Parking?</div>
-                  <div className="text-[11px] text-slate-400">Register your vehicle in 10 seconds</div>
-                </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                Password
+              </label>
+              <div className="relative">
+                <Lock className="absolute left-3.5 top-3 w-4 h-4 text-slate-500" />
+                <input
+                  type={showLoginPassword ? 'text' : 'password'}
+                  required
+                  value={loginPassword}
+                  onChange={(e) => setLoginPassword(e.target.value)}
+                  placeholder="••••••••••••"
+                  className="w-full min-h-[44px] pl-10 pr-10 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-base text-white placeholder-slate-500 focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 transition-colors"
+                />
                 <button
                   type="button"
-                  onClick={() => { setAuthMode('customer_register'); setErrorMessage(''); }}
-                  className="px-3 py-1.5 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 rounded-lg text-white font-semibold transition-all shadow-sm"
+                  onClick={() => setShowLoginPassword(!showLoginPassword)}
+                  className="absolute right-3.5 top-3 text-slate-500 hover:text-slate-300"
                 >
-                  Create Account
+                  {showLoginPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
+            </div>
 
-              {/* Email / Plate / ID Input */}
+            <p className="text-[11px] text-slate-400">
+              Your access role (Administrator or Driver) is loaded directly from your Supabase profile upon sign in.
+            </p>
+
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="w-full min-h-[44px] mt-2 py-3 bg-gradient-to-r from-cyan-500 via-teal-500 to-blue-600 hover:from-cyan-400 text-white font-bold text-base rounded-xl shadow-lg shadow-cyan-500/25 flex items-center justify-center gap-2 transition-all disabled:opacity-50 cursor-pointer"
+            >
+              <span>{isSubmitting ? 'Authenticating...' : 'Sign In'}</span>
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </form>
+        )}
+
+        {/* 2. SIGN UP FORM (Standard User Only - No Admin Option) */}
+        {authMode === 'register' && (
+          <form onSubmit={handleSignUpSubmit} className="space-y-3.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
-                  Customer Email or Vehicle Plate
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  Full Name
                 </label>
                 <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
-                    <Mail className="w-4 h-4" />
-                  </div>
+                  <User className="absolute left-3 top-2.5 w-4 h-4 text-slate-500" />
                   <input
                     type="text"
                     required
-                    value={customerIdentifier}
-                    onChange={(e) => setCustomerIdentifier(e.target.value)}
-                    placeholder="e.g. driver@example.com or KA-01-AB-1234"
-                    className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-500 font-sans"
+                    value={regName}
+                    onChange={(e) => setRegName(e.target.value)}
+                    placeholder="Aditya Sharma"
+                    className="w-full min-h-[44px] pl-9 pr-3 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-base text-white placeholder-slate-500 focus:outline-none focus:border-cyan-400"
                   />
                 </div>
               </div>
 
-              {/* Password Input */}
               <div>
-                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
-                  Password
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  Email
                 </label>
                 <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
-                    <Lock className="w-4 h-4" />
-                  </div>
-                  <input
-                    type={showLoginPassword ? 'text' : 'password'}
-                    required
-                    value={customerPassword}
-                    onChange={(e) => setCustomerPassword(e.target.value)}
-                    placeholder="Enter password (default: password123)"
-                    className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-10 pr-10 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-500 font-mono"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowLoginPassword(!showLoginPassword)}
-                    className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-cyan-400 transition-colors cursor-pointer"
-                    title={showLoginPassword ? "Hide password" : "Show password"}
-                    aria-label="Toggle password visibility"
-                  >
-                    {showLoginPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-                <div className="text-[11px] text-slate-500 mt-1">
-                  Default Demo Password: <code className="text-cyan-400 bg-slate-900 px-1 py-0.5 rounded">password123</code>
-                </div>
-              </div>
-
-              {/* Submit & Cancel Buttons */}
-              <div className="flex items-center gap-2.5 pt-1">
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="w-1/3 py-3 px-3 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 font-semibold rounded-xl transition-all text-xs text-center"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="w-2/3 py-3 px-4 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold rounded-xl shadow-lg shadow-cyan-500/25 flex items-center justify-center gap-2 transition-all transform active:scale-[0.99] text-xs sm:text-sm"
-                >
-                  <span>Sign In</span>
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-              </div>
-            </form>
-          )}
-
-          {/* ------------------------------------------------------------- */}
-          {/* TAB 2: DRIVER / CUSTOMER SIGN UP */}
-          {/* ------------------------------------------------------------- */}
-          {authMode === 'customer_register' && (
-            <form onSubmit={handleCustomerRegisterSubmit} className="space-y-3.5 text-xs">
-              <div>
-                <label className="block text-slate-400 font-semibold mb-1">Full Name</label>
-                <input
-                  type="text"
-                  required
-                  value={regName}
-                  onChange={(e) => setRegName(e.target.value)}
-                  placeholder="e.g. Jordan Vance"
-                  className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-white focus:outline-none focus:border-cyan-500"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-2.5">
-                <div>
-                  <label className="block text-slate-400 font-semibold mb-1">Email Address</label>
+                  <Mail className="absolute left-3 top-2.5 w-4 h-4 text-slate-500" />
                   <input
                     type="email"
                     required
                     value={regEmail}
                     onChange={(e) => setRegEmail(e.target.value)}
-                    placeholder="jordan@example.com"
-                    className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-white focus:outline-none focus:border-cyan-500"
+                    placeholder="aditya@example.com"
+                    className="w-full min-h-[44px] pl-9 pr-3 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-base text-white placeholder-slate-500 focus:outline-none focus:border-cyan-400"
                   />
                 </div>
-                <div>
-                  <label className="block text-slate-400 font-semibold mb-1">
-                    Phone Number <span className="text-[10px] text-cyan-400 font-mono font-normal">(India +91)</span>
-                  </label>
-                  <div className="flex">
-                    <div className="flex items-center px-2.5 bg-slate-800/90 border border-r-0 border-slate-700/80 rounded-l-xl text-slate-300 font-mono font-bold text-xs select-none">
-                      🇮🇳 +91
-                    </div>
-                    <input
-                      type="tel"
-                      inputMode="numeric"
-                      required
-                      maxLength={10}
-                      value={regPhone}
-                      onChange={(e) => {
-                        const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
-                        setRegPhone(digits);
-                      }}
-                      placeholder="9876543210"
-                      className="w-full bg-slate-900 border border-slate-800 rounded-r-xl p-2.5 text-white font-mono focus:outline-none focus:border-cyan-500"
-                    />
-                  </div>
-                  <div className="text-[10px] text-slate-500 mt-1 font-mono">
-                    {regPhone ? `+91 ${regPhone}` : '+91 10-digit number'} ({regPhone.length}/10 digits)
-                  </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  Mobile (+91)
+                </label>
+                <div className="relative">
+                  <Phone className="absolute left-3 top-2.5 w-4 h-4 text-slate-500" />
+                  <input
+                    type="tel"
+                    required
+                    value={regPhone}
+                    onChange={(e) => setRegPhone(e.target.value)}
+                    placeholder="9876543210"
+                    maxLength={10}
+                    className="w-full min-h-[44px] pl-9 pr-3 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-base text-white placeholder-slate-500 focus:outline-none focus:border-cyan-400"
+                  />
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-2.5">
-                <div>
-                  <label className="block text-slate-400 font-semibold mb-1">Vehicle License Plate</label>
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  License Plate
+                </label>
+                <div className="relative">
+                  <Car className="absolute left-3 top-2.5 w-4 h-4 text-slate-500" />
                   <input
                     type="text"
                     required
                     value={regPlate}
-                    onChange={(e) => setRegPlate(e.target.value)}
-                    placeholder="e.g. EV-889-JV"
-                    className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-white font-mono uppercase focus:outline-none focus:border-cyan-500"
+                    onChange={(e) => setRegPlate(e.target.value.toUpperCase())}
+                    placeholder="MH12-EV-7788"
+                    className="w-full min-h-[44px] pl-9 pr-3 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-base text-white uppercase placeholder-slate-500 focus:outline-none focus:border-cyan-400 font-mono"
                   />
                 </div>
-                <div>
-                  <label className="block text-slate-400 font-semibold mb-1">Vehicle Powertrain</label>
-                  <div className="grid grid-cols-2 gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => setRegType('EV')}
-                      className={`p-2 rounded-lg border text-center font-semibold transition-all ${
-                        regType === 'EV'
-                          ? 'border-cyan-500 bg-cyan-950/60 text-cyan-300'
-                          : 'border-slate-800 bg-slate-900 text-slate-400'
-                      }`}
-                    >
-                      ⚡ EV
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setRegType('Non-EV')}
-                      className={`p-2 rounded-lg border text-center font-semibold transition-all ${
-                        regType === 'Non-EV'
-                          ? 'border-emerald-500 bg-emerald-950/60 text-emerald-300'
-                          : 'border-slate-800 bg-slate-900 text-slate-400'
-                      }`}
-                    >
-                      🚗 ICE
-                    </button>
-                  </div>
-                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  Vehicle Powertrain
+                </label>
+                <select
+                  value={regType}
+                  onChange={(e) => setRegType(e.target.value)}
+                  className="w-full min-h-[44px] px-3 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-base text-white focus:outline-none focus:border-cyan-400"
+                >
+                  <option value="EV">Electric Vehicle (EV)</option>
+                  <option value="Non-EV">Standard Fuel (Non-EV)</option>
+                </select>
               </div>
 
-              {regType === 'EV' && (
-                <div className="p-3 bg-slate-900/60 border border-cyan-950 rounded-xl">
-                  <div className="flex justify-between font-semibold mb-1">
-                    <span className="text-slate-400">Current Battery State</span>
-                    <span className="text-cyan-400 font-mono font-bold">{regBattery}%</span>
+              {regType === 'EV' ? (
+                <div>
+                  <div className="flex justify-between text-xs font-semibold text-slate-300 mb-1">
+                    <span>Battery SoC</span>
+                    <span className="text-cyan-400 font-mono">{regBattery}%</span>
                   </div>
                   <input
                     type="range"
@@ -473,142 +505,48 @@ export default function LoginModal({
                     className="w-full accent-cyan-400"
                   />
                 </div>
+              ) : (
+                <div className="flex items-center text-xs text-slate-500 italic pt-6">
+                  Standard bay allocation
+                </div>
               )}
+            </div>
 
-              <div>
-                <label className="block text-slate-400 font-semibold mb-1">Password</label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
-                    <Lock className="w-4 h-4" />
-                  </div>
-                  <input
-                    type={showRegPassword ? 'text' : 'password'}
-                    required
-                    value={regPassword}
-                    onChange={(e) => setRegPassword(e.target.value)}
-                    placeholder="Create a secure password"
-                    className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-10 pr-10 p-2.5 text-white font-mono focus:outline-none focus:border-cyan-500"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowRegPassword(!showRegPassword)}
-                    className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-cyan-400 transition-colors cursor-pointer"
-                    title={showRegPassword ? "Hide password" : "Show password"}
-                    aria-label="Toggle password visibility"
-                  >
-                    {showRegPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-              </div>
-
-              {/* Submit & Cancel Buttons */}
-              <div className="flex items-center gap-2.5 pt-1">
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1">
+                Password
+              </label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-2.5 w-4 h-4 text-slate-500" />
+                <input
+                  type={showRegPassword ? 'text' : 'password'}
+                  required
+                  value={regPassword}
+                  onChange={(e) => setRegPassword(e.target.value)}
+                  placeholder="Create secure password"
+                  className="w-full min-h-[44px] pl-9 pr-9 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-base text-white placeholder-slate-500 focus:outline-none focus:border-cyan-400"
+                />
                 <button
                   type="button"
-                  onClick={onClose}
-                  className="w-1/3 py-3 px-3 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 font-semibold rounded-xl transition-all text-xs text-center"
+                  onClick={() => setShowRegPassword(!showRegPassword)}
+                  className="absolute right-3 top-2.5 text-slate-500 hover:text-slate-300"
                 >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="w-2/3 py-3 px-4 bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-400 hover:to-emerald-500 text-white font-bold rounded-xl shadow-lg shadow-emerald-500/25 flex items-center justify-center gap-2 transition-all text-xs"
-                >
-                  <UserPlus className="w-4 h-4" />
-                  <span>Create Account</span>
+                  {showRegPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
-            </form>
-          )}
+            </div>
 
-          {/* ------------------------------------------------------------- */}
-          {/* TAB 3: ADMIN CONSOLE SIGN IN */}
-          {/* ------------------------------------------------------------- */}
-          {authMode === 'admin_login' && (
-            <form onSubmit={handleAdminSubmit} className="space-y-4">
-              
-              <div className="grid grid-cols-3 gap-2.5 p-3.5 bg-slate-900/90 border border-slate-800 rounded-xl text-center text-xs">
-                <div className="p-2 bg-slate-950/60 rounded-lg border border-slate-800">
-                  <div className="text-slate-400 text-[10px]">Total Logged In</div>
-                  <div className="text-lg font-bold text-white font-mono">{activeUsers?.totalLoggedIn || 3}</div>
-                </div>
-                <div className="p-2 bg-slate-950/60 rounded-lg border border-slate-800">
-                  <div className="text-slate-400 text-[10px]">Active Drivers</div>
-                  <div className="text-lg font-bold text-cyan-400 font-mono">{activeUsers?.activeDriversSeeking || 2}</div>
-                </div>
-                <div className="p-2 bg-slate-950/60 rounded-lg border border-slate-800">
-                  <div className="text-slate-400 text-[10px]">Admin Sessions</div>
-                  <div className="text-lg font-bold text-emerald-400 font-mono">{activeUsers?.adminSessions || 1}</div>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
-                  Admin Passcode Verification
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
-                    <Lock className="w-4 h-4" />
-                  </div>
-                  <input
-                    type={showAdminPassword ? 'text' : 'password'}
-                    required
-                    value={adminPasscode}
-                    onChange={(e) => setAdminPasscode(e.target.value)}
-                    placeholder="Enter admin passcode (default: admin123)"
-                    className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-10 pr-10 py-2.5 text-xs text-white focus:outline-none focus:border-emerald-500 font-mono"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowAdminPassword(!showAdminPassword)}
-                    className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-emerald-400 transition-colors cursor-pointer"
-                    title={showAdminPassword ? "Hide passcode" : "Show passcode"}
-                    aria-label="Toggle passcode visibility"
-                  >
-                    {showAdminPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-                <p className="text-[11px] text-slate-500 mt-1">
-                  Default Demo Passcode: <code className="text-emerald-400 bg-slate-900 px-1 py-0.5 rounded">admin123</code>
-                </p>
-              </div>
-
-              {/* Submit & Cancel Buttons */}
-              <div className="flex items-center gap-2.5 pt-1">
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="w-1/3 py-3 px-3 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 font-semibold rounded-xl transition-all text-xs text-center"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="w-2/3 py-3 px-4 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold rounded-xl shadow-lg shadow-emerald-500/25 flex items-center justify-center gap-2 transition-all text-xs sm:text-sm"
-                >
-                  <Shield className="w-4 h-4" />
-                  <span>Access Controller</span>
-                </button>
-              </div>
-            </form>
-          )}
-
-          {/* Modal Footer */}
-          <div className="mt-5 pt-4 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-500">
-            <span>Course: IDEA Lab • Dept. of Computer Engineering</span>
             <button
-              type="button"
-              onClick={onClose}
-              className="text-cyan-400 hover:text-cyan-300 font-semibold hover:underline flex items-center gap-1 transition-colors"
+              type="submit"
+              disabled={isSubmitting}
+              className="w-full min-h-[44px] mt-2 py-3 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 text-white font-bold text-base rounded-xl shadow-lg shadow-emerald-500/25 flex items-center justify-center gap-2 transition-all disabled:opacity-50 cursor-pointer"
             >
-              <span>Explore Landing Page as Guest</span>
-              <ChevronRight className="w-3.5 h-3.5" />
+              <span>{isSubmitting ? 'Registering Account...' : 'Create Driver Profile'}</span>
+              <CheckCircle2 className="w-4 h-4" />
             </button>
-          </div>
+          </form>
+        )}
 
-        </div>
       </div>
     </div>
   );

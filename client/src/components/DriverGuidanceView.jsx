@@ -20,10 +20,14 @@ import {
   HelpCircle,
   Sparkles,
   Radio,
-  FileWarning
+  FileWarning,
+  Activity,
+  LogOut,
+  ChevronRight
 } from 'lucide-react';
 import { PRICING, formatINR, calculateChargingEstimate, calculateSessionBill } from '../utils/constants';
 import ParkingMap from './ParkingMap';
+import { supabase } from '../supabase';
 
 export default function DriverGuidanceView({ 
   allocationData = null, 
@@ -42,6 +46,115 @@ export default function DriverGuidanceView({
   const [viewFormat, setViewFormat] = useState('both'); // 'both' | 'map' | 'cards'
   const [hasContinuedParking, setHasContinuedParking] = useState(false);
 
+  // -------------------------------------------------------------
+  // USER PORTAL STATE: LOCATIONS, SESSIONS, STATUS & EVENTS
+  // -------------------------------------------------------------
+  const [locations, setLocations] = useState([]);
+  const [selectedLocationId, setSelectedLocationId] = useState('');
+  const [activeSession, setActiveSession] = useState(parkingSession || null);
+  // Status transitions: 'idle' -> 'en_route' -> 'parked' -> 'exiting' -> 'completed'
+  const [portalStatus, setPortalStatus] = useState('idle');
+  const [transitionError, setTransitionError] = useState('');
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+
+  // Fallback allotted bay if allocationData is present or default
+  const allottedBay = activeSession?.spot_id || activeSession?.bay_id || allocationData?.assignedSpot?.id || 'EV01';
+
+  // 1. HEARTBEAT TO user_presence EVERY 30s
+  useEffect(() => {
+    if (!currentUser?.id && !currentUser?.email) return;
+
+    const sendHeartbeat = async () => {
+      try {
+        if (supabase) {
+          const userId = currentUser.id || currentUser.email;
+          await supabase.from('user_presence').upsert({
+            user_id: userId,
+            email: currentUser.email || '',
+            name: currentUser.name || '',
+            vehicle_plate: currentUser.vehiclePlate || currentUser.vehicle_plate || '',
+            last_seen: new Date().toISOString()
+          }, { onConflict: 'user_id' });
+        }
+      } catch (err) {
+        console.warn('user_presence heartbeat notice:', err);
+      }
+    };
+
+    sendHeartbeat();
+    const heartbeatInterval = setInterval(sendHeartbeat, 30000); // 30s heartbeat
+    return () => clearInterval(heartbeatInterval);
+  }, [currentUser]);
+
+  // 2. FETCH PARKING LOCATIONS FROM parking_locations TABLE
+  useEffect(() => {
+    const fetchLocations = async () => {
+      try {
+        if (supabase) {
+          const { data, error } = await supabase
+            .from('parking_locations')
+            .select('*')
+            .order('name', { ascending: true });
+
+          if (!error && data && data.length > 0) {
+            setLocations(data);
+            setSelectedLocationId(data[0].id);
+            return;
+          }
+        }
+      } catch (e) {
+        console.warn('Locations fetch error:', e);
+      }
+
+      // Default facilities fallback
+      const defaultLocs = [
+        { id: 'loc-tech-central', name: 'Central Urban Facility (Sector 4)', address: 'Cyber Gateway 01, Pune' },
+        { id: 'loc-metro-hub', name: 'Metro West Fast Charging Hub', address: 'Transit Corridor North' },
+        { id: 'loc-downtown-express', name: 'Downtown Smart Express Deck', address: 'Commercial Ave, South' }
+      ];
+      setLocations(defaultLocs);
+      setSelectedLocationId(defaultLocs[0].id);
+    };
+
+    fetchLocations();
+  }, []);
+
+  // 3. FETCH OR SYNC ACTIVE PARKING SESSION
+  useEffect(() => {
+    if (parkingSession) {
+      setActiveSession(parkingSession);
+      const st = (parkingSession.status || '').toLowerCase();
+      if (['en_route', 'parked', 'exiting', 'completed'].includes(st)) {
+        setPortalStatus(st);
+      }
+    } else if (currentUser && supabase) {
+      const loadUserSession = async () => {
+        try {
+          const userId = currentUser.id || currentUser.email;
+          const { data, error } = await supabase
+            .from('parking_sessions')
+            .select('*')
+            .or(`customer_id.eq.${userId},vehicle_plate.eq.${currentUser.vehiclePlate || currentUser.vehicle_plate}`)
+            .neq('status', 'completed')
+            .order('entry_time', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (!error && data) {
+            setActiveSession(data);
+            const st = (data.status || '').toLowerCase();
+            if (['en_route', 'parked', 'exiting', 'completed'].includes(st)) {
+              setPortalStatus(st);
+            }
+          }
+        } catch (e) {
+          console.warn('Session load notice:', e);
+        }
+      };
+      loadUserSession();
+    }
+  }, [parkingSession, currentUser]);
+
   useEffect(() => {
     const timer = setInterval(() => {
       setCountdown((prev) => (prev > 0 ? prev - 1 : 0));
@@ -49,29 +162,148 @@ export default function DriverGuidanceView({
     return () => clearInterval(timer);
   }, []);
 
-  if (!allocationData || !allocationData.assignedSpot) {
-    return (
-      <div className="bg-[#0B1120] border border-slate-800 rounded-2xl p-8 text-center text-slate-400 max-w-xl mx-auto">
-        <MapPin className="w-12 h-12 text-slate-600 mx-auto mb-3" />
-        <h3 className="text-lg font-bold text-white mb-2">No Active Driver Allocation</h3>
-        <p className="text-xs mb-4">Please submit your vehicle information via the Driver Login portal.</p>
-        <button
-          type="button"
-          onClick={onBackToDashboard}
-          className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold rounded-xl cursor-pointer"
-        >
-          Return to Dashboard
-        </button>
-      </div>
-    );
-  }
+  // 4. IN-ORDER STATUS TRANSITIONS HANDLER
+  // Strict Order: 'idle'/'completed' -> 'en_route' -> 'parked' -> 'exiting' -> 'completed'
+  const handleTransition = async (targetStatus) => {
+    setTransitionError('');
+    setIsUpdatingStatus(true);
 
-  const { assignedSpot, spotsChecked, distanceTraveled, priorityAssigned } = allocationData;
-  const isEV = assignedSpot.type === 'ev' || allocationData.isEV;
-  const sessionStatus = parkingSession?.status || (isEV ? 'CHARGING_COMPLETE' : 'PARKED');
-  const isChargingComplete = sessionStatus === 'CHARGING_COMPLETE' || parkingSession?.chargerStatus === 'CHARGING_COMPLETE';
-  const isCheckoutRequested = sessionStatus === 'CHECKOUT_REQUESTED' || sessionStatus === 'APPROACHING_EXIT';
-  const isExitVerified = sessionStatus === 'EXIT_VERIFIED' || sessionStatus === 'COMPLETED';
+    try {
+      // Transition Validation Guards
+      if (targetStatus === 'en_route') {
+        if (portalStatus === 'parked' || portalStatus === 'exiting') {
+          throw new Error('Invalid order: Vehicle is already parked or exiting.');
+        }
+      } else if (targetStatus === 'parked') {
+        if (portalStatus !== 'en_route') {
+          throw new Error('Invalid order: You must select "Coming to parking" (en_route) before marking "Parked".');
+        }
+      } else if (targetStatus === 'exiting') {
+        if (portalStatus !== 'parked') {
+          throw new Error('Invalid order: You can only exit after being in "Parked" status.');
+        }
+      }
+
+      const timestamp = new Date().toISOString();
+      let sessionId = activeSession?.id;
+
+      // If starting en_route without existing session, initialize one
+      if (targetStatus === 'en_route' && !sessionId) {
+        sessionId = `sess_${Date.now()}`;
+        const newSessionRecord = {
+          id: sessionId,
+          customer_id: currentUser?.id || currentUser?.email || 'guest',
+          customer_name: currentUser?.name || 'Driver',
+          vehicle_plate: currentUser?.vehiclePlate || currentUser?.vehicle_plate || 'MH12-EV-2026',
+          vehicle_type: currentUser?.vehicleType || 'EV',
+          spot_id: allottedBay,
+          battery_level: currentUser?.batteryLevel || 25,
+          entry_time: timestamp,
+          status: 'en_route'
+        };
+
+        if (supabase) {
+          try {
+            await supabase.from('parking_sessions').insert(newSessionRecord);
+          } catch (insertErr) {
+            console.warn('Supabase session insert notice:', insertErr);
+          }
+        }
+        setActiveSession(newSessionRecord);
+      } else if (sessionId && supabase) {
+        // Update parking_sessions status
+        try {
+          await supabase
+            .from('parking_sessions')
+            .update({ 
+              status: targetStatus,
+              ...(targetStatus === 'completed' ? { exit_time: timestamp } : {})
+            })
+            .eq('id', sessionId);
+        } catch (updateErr) {
+          console.warn('Supabase session update notice:', updateErr);
+        }
+      }
+
+      // Record event in session_events table
+      if (supabase && sessionId) {
+        try {
+          await supabase.from('session_events').insert({
+            session_id: sessionId,
+            event_type: targetStatus,
+            timestamp,
+            details: {
+              bay: allottedBay,
+              vehicle_plate: currentUser?.vehiclePlate || currentUser?.vehicle_plate,
+              location_id: selectedLocationId,
+              status: targetStatus
+            }
+          });
+        } catch (evErr) {
+          console.warn('session_events insert notice:', evErr);
+        }
+      }
+
+      // If targetStatus is exiting: complete the session and free the bay
+      if (targetStatus === 'exiting') {
+        setPortalStatus('exiting');
+        
+        // Finalize to completed & free the bay
+        setTimeout(async () => {
+          if (supabase && sessionId) {
+            try {
+              await supabase
+                .from('parking_sessions')
+                .update({ status: 'completed', exit_time: new Date().toISOString() })
+                .eq('id', sessionId);
+
+              await supabase.from('session_events').insert({
+                session_id: sessionId,
+                event_type: 'completed',
+                timestamp: new Date().toISOString(),
+                details: { bay: allottedBay, action: 'bay_freed' }
+              });
+
+              // Free the spot in spots table if present
+              await supabase
+                .from('spots')
+                .update({ status: 'free', occupied_by: null })
+                .eq('id', allottedBay);
+            } catch (freeErr) {
+              console.warn('Spot free error:', freeErr);
+            }
+          }
+          setPortalStatus('completed');
+          if (onParkVehicle) onParkVehicle();
+        }, 1200);
+      } else {
+        setPortalStatus(targetStatus);
+        if (targetStatus === 'parked' && onParkVehicle) {
+          onParkVehicle();
+        }
+      }
+
+    } catch (err) {
+      setTransitionError(err.message || 'Status transition error.');
+    } finally {
+      setIsUpdatingStatus(false);
+    }
+  };
+
+  const assignedSpot = allocationData?.assignedSpot || {
+    id: allottedBay,
+    name: `Bay ${allottedBay}`,
+    type: allottedBay.startsWith('EV') ? 'ev' : 'regular',
+    row: 1,
+    col: 1
+  };
+
+  const distanceTraveled = allocationData?.distanceTraveled || '5.13';
+  const isEV = assignedSpot.type === 'ev' || currentUser?.vehicleType === 'EV';
+  const sessionStatus = portalStatus !== 'idle' ? portalStatus.toUpperCase() : (parkingSession?.status || 'EN_ROUTE');
+  const isChargingComplete = portalStatus === 'parked' || sessionStatus === 'CHARGING_COMPLETE';
+  const isCheckoutRequested = portalStatus === 'exiting';
+  const isExitVerified = portalStatus === 'completed';
 
   const bill = calculateSessionBill(parkingSession || {
     spotId: assignedSpot.id,
@@ -82,7 +314,7 @@ export default function DriverGuidanceView({
     entryTime: new Date(Date.now() - 1000 * 60 * 72).toISOString()
   });
 
-  const batteryLevel = isChargingComplete ? 100 : (parkingSession?.batteryLevel || allocationData.batteryLevel || (isEV ? 18 : null));
+  const batteryLevel = isChargingComplete ? 100 : (parkingSession?.batteryLevel || allocationData?.batteryLevel || (isEV ? 18 : null));
   const estimate = calculateChargingEstimate(batteryLevel || 20, 80);
 
   const formatTime = (secs) => {
@@ -94,6 +326,155 @@ export default function DriverGuidanceView({
   return (
     <div className="max-w-6xl mx-auto space-y-6">
       
+      {/* ------------------------------------------------------------- */}
+      {/* 0. USER PORTAL CONTROL: LOCATION PICKER, ALLOTTED BAY & 3 BUTTONS */}
+      {/* ------------------------------------------------------------- */}
+      <div className="bg-[#0B1120] border border-cyan-500/50 rounded-2xl p-6 shadow-2xl relative overflow-hidden space-y-5">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-800 pb-4">
+          <div>
+            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-cyan-400 mb-1">
+              <Activity className="w-3.5 h-3.5 animate-pulse" />
+              <span>Real-Time Driver Parking Portal</span>
+            </div>
+            <h2 className="text-xl font-black text-white">
+              Location Dispatch & Bay Allocation Control
+            </h2>
+          </div>
+
+          {/* Location Picker (from parking_locations) */}
+          <div className="flex items-center gap-2">
+            <MapPin className="w-4 h-4 text-cyan-400 shrink-0" />
+            <select
+              value={selectedLocationId}
+              onChange={(e) => setSelectedLocationId(e.target.value)}
+              className="w-full sm:w-auto min-h-[44px] bg-slate-900 border border-slate-700 text-white text-base sm:text-xs rounded-xl px-3 py-2.5 focus:outline-none focus:border-cyan-400 font-semibold"
+            >
+              {locations.map((loc) => (
+                <option key={loc.id} value={loc.id}>
+                  {loc.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* Allotted Bay Indicator & Status Badge */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="p-4 bg-slate-900/90 border border-slate-800 rounded-xl">
+            <span className="text-[10px] font-mono text-slate-400 uppercase">Allotted Parking Bay</span>
+            <div className="text-2xl font-black font-mono text-cyan-300 mt-1 flex items-center gap-2">
+              <span>{allottedBay}</span>
+              <span className="text-xs px-2 py-0.5 rounded-md bg-cyan-950 text-cyan-300 border border-cyan-700 uppercase font-sans font-bold">
+                {isEV ? '50kW EV Fast' : 'Standard'}
+              </span>
+            </div>
+            <div className="text-[11px] text-slate-400 mt-0.5">Assigned via Central Algorithm</div>
+          </div>
+
+          <div className="p-4 bg-slate-900/90 border border-slate-800 rounded-xl">
+            <span className="text-[10px] font-mono text-slate-400 uppercase">Current Session Status</span>
+            <div className="mt-1 flex items-center gap-2">
+              <span className={`text-sm font-bold font-mono px-3 py-1 rounded-lg uppercase ${
+                portalStatus === 'en_route'
+                  ? 'bg-amber-950 text-amber-300 border border-amber-600 animate-pulse'
+                  : portalStatus === 'parked'
+                    ? 'bg-emerald-950 text-emerald-300 border border-emerald-500'
+                    : portalStatus === 'exiting'
+                      ? 'bg-purple-950 text-purple-300 border border-purple-500'
+                      : portalStatus === 'completed'
+                        ? 'bg-slate-800 text-slate-400 border border-slate-700'
+                        : 'bg-cyan-950 text-cyan-300 border border-cyan-800'
+              }`}>
+                {portalStatus === 'idle' ? 'Ready for Arrival' : portalStatus.replace('_', ' ')}
+              </span>
+            </div>
+            <div className="text-[11px] text-slate-400 mt-1">Presence heartbeat active (30s)</div>
+          </div>
+
+          <div className="p-4 bg-slate-900/90 border border-slate-800 rounded-xl">
+            <span className="text-[10px] font-mono text-slate-400 uppercase">Registered Vehicle</span>
+            <div className="text-sm font-bold text-white mt-1 font-mono">
+              {currentUser?.vehiclePlate || currentUser?.vehicle_plate || 'MH12-EV-2026'}
+            </div>
+            <div className="text-[11px] text-slate-400 mt-0.5">
+              {currentUser?.name || 'Driver'} â€¢ {currentUser?.vehicleType || 'EV'}
+            </div>
+          </div>
+        </div>
+
+        {/* Transition Error Alert */}
+        {transitionError && (
+          <div className="p-3 bg-rose-950/80 border border-rose-500 text-rose-300 rounded-xl text-xs flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 shrink-0" />
+            <span>{transitionError}</span>
+          </div>
+        )}
+
+        {/* 3 SEQUENTIAL IN-ORDER TRANSITION BUTTONS */}
+        <div className="space-y-2">
+          <div className="text-xs font-semibold text-slate-300">
+            Sequential Parking State Transitions (In-Order Enforced):
+          </div>
+
+          <div className="flex flex-col gap-3 w-full">
+            
+            {/* Button 1: "Coming to parking" -> en_route */}
+            <button
+              type="button"
+              disabled={isUpdatingStatus || portalStatus === 'parked' || portalStatus === 'exiting'}
+              onClick={() => handleTransition('en_route')}
+              className={`p-3.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all ${
+                portalStatus === 'en_route'
+                  ? 'bg-amber-600 text-white ring-2 ring-amber-400 shadow-lg shadow-amber-500/25'
+                  : portalStatus === 'parked' || portalStatus === 'exiting'
+                    ? 'bg-slate-900 border border-slate-800 text-slate-600 cursor-not-allowed opacity-50'
+                    : 'bg-cyan-600 hover:bg-cyan-500 text-white shadow-md shadow-cyan-600/20 cursor-pointer'
+              }`}
+            >
+              <Navigation className="w-4 h-4" />
+              <span>1. Coming to parking</span>
+              {portalStatus === 'en_route' && <CheckCircle2 className="w-4 h-4 text-white" />}
+            </button>
+
+            {/* Button 2: "Parked / Charging" -> parked */}
+            <button
+              type="button"
+              disabled={isUpdatingStatus || portalStatus !== 'en_route'}
+              onClick={() => handleTransition('parked')}
+              className={`p-3.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all ${
+                portalStatus === 'parked'
+                  ? 'bg-emerald-600 text-white ring-2 ring-emerald-400 shadow-lg shadow-emerald-500/25'
+                  : portalStatus !== 'en_route'
+                    ? 'bg-slate-900 border border-slate-800 text-slate-600 cursor-not-allowed opacity-50'
+                    : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-600/20 cursor-pointer animate-pulse'
+              }`}
+            >
+              <Zap className="w-4 h-4" />
+              <span>2. Parked / Charging</span>
+              {portalStatus === 'parked' && <CheckCircle2 className="w-4 h-4 text-white" />}
+            </button>
+
+            {/* Button 3: "Exiting" -> exiting then completed (free the bay) */}
+            <button
+              type="button"
+              disabled={isUpdatingStatus || portalStatus !== 'parked'}
+              onClick={() => handleTransition('exiting')}
+              className={`p-3.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all ${
+                portalStatus === 'exiting' || portalStatus === 'completed'
+                  ? 'bg-purple-600 text-white shadow-lg'
+                  : portalStatus !== 'parked'
+                    ? 'bg-slate-900 border border-slate-800 text-slate-600 cursor-not-allowed opacity-50'
+                    : 'bg-rose-600 hover:bg-rose-500 text-white shadow-md shadow-rose-600/20 cursor-pointer'
+              }`}
+            >
+              <LogOut className="w-4 h-4" />
+              <span>3. Exiting (Free Bay)</span>
+            </button>
+
+          </div>
+        </div>
+      </div>
+
       {/* ------------------------------------------------------------- */}
       {/* 1. TOP BANNER & ALLOCATION STATE */}
       {/* ------------------------------------------------------------- */}
@@ -112,7 +493,7 @@ export default function DriverGuidanceView({
                 Assigned Spot: {assignedSpot.name} ({assignedSpot.id})
               </h2>
               <p className="text-xs text-slate-400 mt-0.5">
-                Target Bay: Row {assignedSpot.row}, Bay {assignedSpot.col} • Search Distance: <strong className="text-emerald-400 font-mono">{distanceTraveled} units</strong>
+                Target Bay: Row {assignedSpot.row}, Bay {assignedSpot.col} â€¢ Search Distance: <strong className="text-emerald-400 font-mono">{distanceTraveled} units</strong>
               </p>
             </div>
           </div>
@@ -138,357 +519,88 @@ export default function DriverGuidanceView({
                 }`}
               >
                 <MapIcon className="w-3.5 h-3.5" />
-                <span>Map</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewFormat('cards')}
-                className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1 ${
-                  viewFormat === 'cards' ? 'bg-cyan-600 text-white shadow' : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                <List className="w-3.5 h-3.5" />
-                <span>Steps</span>
+                <span className="hidden sm:inline">Map Only</span>
               </button>
             </div>
 
-            <div className="p-3 bg-slate-950/80 border border-slate-800 rounded-xl flex items-center gap-3">
-              <Clock className="w-5 h-5 text-amber-400" />
-              <div>
-                <div className="text-[10px] text-slate-400">Reservation Hold</div>
-                <div className="text-base font-bold font-mono text-amber-400">{formatTime(countdown)}</div>
-              </div>
+            <div className="px-3.5 py-1.5 bg-cyan-950/90 border border-cyan-500/80 rounded-xl text-center shadow-lg">
+              <div className="text-[9px] font-mono uppercase tracking-wider text-cyan-300">Slot Hold</div>
+              <div className="text-sm font-black font-mono text-white">{formatTime(countdown)}</div>
             </div>
           </div>
         </div>
       </div>
 
       {/* ------------------------------------------------------------- */}
-      {/* 2. PROMINENT "MY CURRENT PARKING SESSION" CARD */}
+      {/* 2. SPATIAL MAP & TURN-BY-TURN HUD */}
       {/* ------------------------------------------------------------- */}
-      <div className="bg-[#0B1120] border-2 border-cyan-500/50 rounded-3xl p-6 shadow-[0_0_35px_rgba(6,182,212,0.15)] relative overflow-hidden">
-        
-        {/* Glow accent */}
-        <div className="absolute top-0 right-0 w-48 h-48 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
-
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-4 mb-5">
-          <div className="flex items-center gap-3">
-            <div className="p-3 bg-gradient-to-tr from-cyan-600 to-emerald-500 text-slate-950 rounded-2xl shadow-lg">
-              <Car className="w-6 h-6" />
-            </div>
-            <div>
-              <div className="text-[10px] font-mono uppercase tracking-widest text-cyan-400 font-extrabold flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
-                <span>LIVE OCCUPANCY & VEHICLE SESSION</span>
-              </div>
-              <h3 className="text-xl font-black text-white tracking-tight">
-                My Current Parking Session
-              </h3>
-            </div>
-          </div>
-
+      <div className="bg-[#0B1120] border border-slate-800 rounded-2xl p-4 md:p-6 shadow-xl">
+        <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
-            <span className="px-3 py-1 rounded-xl text-xs font-mono font-bold bg-slate-900 border border-slate-700 text-slate-300">
-              Session #{parkingSession?.id || 'PARK-1024'}
-            </span>
-            <span className={`px-3 py-1 rounded-xl text-xs font-mono font-bold border ${
-              isExitVerified
-                ? 'bg-emerald-950 text-emerald-300 border-emerald-600'
-                : isCheckoutRequested
-                ? 'bg-amber-950 text-amber-300 border-amber-600 animate-pulse'
-                : isChargingComplete
-                ? 'bg-cyan-950 text-cyan-300 border-cyan-500'
-                : 'bg-blue-950 text-blue-300 border-blue-600'
-            }`}>
-              {isExitVerified ? 'EXIT COMPLETED' : isCheckoutRequested ? 'CHECKOUT REQUESTED' : isChargingComplete ? 'CHARGING COMPLETE' : 'PARKED / ACTIVE'}
-            </span>
+            <MapIcon className="w-4 h-4 text-cyan-400" />
+            <h3 className="text-sm font-bold text-white uppercase tracking-wider font-mono">
+              Turn-by-Turn Wayfinding Routing
+            </h3>
           </div>
+          <span className="text-xs font-mono text-slate-400">
+            Target Bay: <strong className="text-cyan-300 font-bold">{allottedBay}</strong>
+          </span>
         </div>
 
-        {/* Live Metrics Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
-          <div className="p-3.5 bg-slate-900/80 border border-slate-800 rounded-2xl">
-            <div className="text-[10px] uppercase font-bold text-slate-400">Assigned Spot</div>
-            <div className="text-xl font-black font-mono text-white mt-0.5 flex items-center gap-1.5">
-              <span>{assignedSpot.id}</span>
-              <span className="text-xs text-cyan-400 font-sans font-semibold">({isEV ? 'EV Fast' : 'Regular'})</span>
-            </div>
-          </div>
-
-          {isEV ? (
-            <>
-              <div className="p-3.5 bg-slate-900/80 border border-slate-800 rounded-2xl">
-                <div className="text-[10px] uppercase font-bold text-slate-400">Battery & Charger</div>
-                <div className="text-xl font-black font-mono text-cyan-300 mt-0.5 flex items-center gap-1">
-                  <span>{batteryLevel}%</span>
-                  <span className="text-xs text-slate-400 font-sans font-normal">• 50 kW</span>
-                </div>
-              </div>
-
-              <div className="p-3.5 bg-slate-900/80 border border-slate-800 rounded-2xl">
-                <div className="text-[10px] uppercase font-bold text-slate-400">Charging Cost</div>
-                <div className="text-xl font-black font-mono text-cyan-300 mt-0.5">
-                  {formatINR(bill.chargingCost)}
-                </div>
-              </div>
-            </>
-          ) : (
-            <div className="p-3.5 bg-slate-900/80 border border-slate-800 rounded-2xl">
-              <div className="text-[10px] uppercase font-bold text-slate-400">Vehicle Type</div>
-              <div className="text-xl font-black text-white mt-0.5">
-                Standard ICE
-              </div>
-            </div>
-          )}
-
-          <div className="p-3.5 bg-slate-900/80 border border-slate-800 rounded-2xl">
-            <div className="text-[10px] uppercase font-bold text-slate-400">Parking Dwell Fee</div>
-            <div className="text-xl font-black font-mono text-emerald-300 mt-0.5">
-              {formatINR(bill.parkingCost)}
-            </div>
-          </div>
-        </div>
-
-        {/* ------------------------------------------------------------- */}
-        {/* CHARGING COMPLETE NOTIFICATION BANNER (IF 100% EV) */}
-        {/* ------------------------------------------------------------- */}
-        {isEV && isChargingComplete && !isCheckoutRequested && !isExitVerified && (
-          <div className="mb-5 p-4 bg-gradient-to-r from-cyan-950/90 to-blue-950/90 border-2 border-cyan-400 rounded-2xl shadow-[0_0_20px_rgba(6,182,212,0.3)] space-y-3">
-            <div className="flex items-start gap-3">
-              <div className="p-2.5 bg-cyan-400 text-slate-950 rounded-xl shadow font-black shrink-0">
-                ⚡
-              </div>
-              <div className="space-y-1">
-                <h4 className="text-sm font-extrabold text-white flex items-center gap-2">
-                  <span>Charging Complete — Your vehicle is fully charged (100%)</span>
-                  <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-cyan-900 text-cyan-200 border border-cyan-600">
-                    Spot: {assignedSpot.id}
-                  </span>
-                </h4>
-                <p className="text-xs text-slate-300 leading-relaxed">
-                  Your battery has reached 100%. The vehicle remains safely parked in bay <strong className="text-cyan-300 font-mono">{assignedSpot.id}</strong>. You can choose to continue parking or check out when you are ready to depart.
-                </p>
-                <p className="text-[11px] text-cyan-200/80 italic">
-                  💡 Overstay Policy: Dwell parking rate ({formatINR(PRICING.parkingPerHour)}/hr) continues to apply while your vehicle occupies the bay.
-                </p>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setHasContinuedParking(true);
-                  if (onContinueParking) onContinueParking();
-                }}
-                className={`px-4 py-2.5 rounded-xl border text-xs font-bold transition-all ${
-                  hasContinuedParking 
-                    ? 'bg-slate-800 border-cyan-500 text-cyan-300' 
-                    : 'bg-slate-900/90 border-slate-700 text-slate-300 hover:bg-slate-800'
-                }`}
-              >
-                {hasContinuedParking ? '✓ Parking Extended' : 'Continue Parking'}
-              </button>
-
-              <button
-                type="button"
-                onClick={onOpenCheckoutModal}
-                className="px-6 py-2.5 bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-400 text-slate-950 font-black text-xs rounded-xl shadow-lg shadow-cyan-500/30 flex items-center gap-2 transition-all active:scale-95 cursor-pointer"
-              >
-                <span>🚗 Check Out</span>
-                <ArrowRight className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* ------------------------------------------------------------- */}
-        {/* ACTION BUTTONS (IF NORMAL PARKING OR BEFORE CHECKOUT) */}
-        {/* ------------------------------------------------------------- */}
-        {!isCheckoutRequested && !isExitVerified && (!isEV || !isChargingComplete) && (
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
-            <div className="text-xs text-slate-400">
-              Vehicle is actively parked in bay <strong className="text-white font-mono">{assignedSpot.id}</strong>.
-            </div>
-
-            <button
-              type="button"
-              onClick={onOpenCheckoutModal}
-              className="w-full sm:w-auto px-6 py-3 bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-400 text-slate-950 font-black text-xs rounded-xl shadow-lg shadow-cyan-500/30 flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer"
-            >
-              <span>🚗 Check Out</span>
-              <ArrowRight className="w-4 h-4" />
-            </button>
-          </div>
-        )}
-
-        {/* ------------------------------------------------------------- */}
-        {/* 3. EXIT GATE WAYFINDING & VERIFICATION CARD */}
-        {/* ------------------------------------------------------------- */}
-        {isCheckoutRequested && !isExitVerified && (
-          <div className="p-5 bg-gradient-to-r from-amber-950/40 via-slate-900 to-amber-950/40 border-2 border-amber-500/80 rounded-2xl space-y-4 animate-fade-in">
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className="p-3 bg-amber-500 text-slate-950 rounded-xl font-black shadow-lg shadow-amber-500/30">
-                  <Navigation className="w-6 h-6 animate-pulse" />
-                </div>
-                <div>
-                  <div className="text-[10px] font-mono uppercase tracking-widest text-amber-400 font-extrabold">
-                    CHECKOUT CONFIRMED • PROCEED TO EXIT
-                  </div>
-                  <h4 className="text-lg font-black text-white">
-                    Navigate to North Exit Gate (120 m)
-                  </h4>
-                </div>
-              </div>
-              <span className="px-3 py-1 rounded-full text-xs font-mono font-bold bg-amber-950 text-amber-300 border border-amber-600 flex items-center gap-1.5 animate-pulse">
-                <Radio className="w-3.5 h-3.5" /> Exit Verification Pending
-              </span>
-            </div>
-
-            <div className="p-3.5 bg-slate-950/70 border border-slate-800 rounded-xl flex items-center justify-between text-xs">
-              <div className="flex items-center gap-2 text-slate-300 font-mono">
-                <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-700 text-cyan-300 font-bold">{assignedSpot.id}</span>
-                <span>&rarr;</span>
-                <span className="text-slate-400">Transit Lane</span>
-                <span>&rarr;</span>
-                <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-700 text-emerald-300 font-bold">North Exit</span>
-                <span>&rarr;</span>
-                <span className="text-amber-400 font-bold">EXIT</span>
-              </div>
-              <span className="text-slate-400">Est: 1 min</span>
-            </div>
-
-            <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-              <div className="text-[11px] text-slate-400">
-                Please follow marked wayfinding arrows. Spot <strong className="text-white font-mono">{assignedSpot.id}</strong> will be released upon barrier scan.
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={onOpenReportGateFault}
-                  className="px-3 py-2 bg-slate-900 hover:bg-slate-800 text-rose-300 border border-rose-800/80 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all"
-                >
-                  <FileWarning className="w-3.5 h-3.5" />
-                  <span>Report Gate Problem</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ------------------------------------------------------------- */}
-        {/* 4. EXIT COMPLETED CELEBRATORY CARD */}
-        {/* ------------------------------------------------------------- */}
-        {isExitVerified && (
-          <div className="p-5 bg-gradient-to-r from-emerald-950/50 via-slate-900 to-teal-950/50 border-2 border-emerald-500 rounded-2xl space-y-4 animate-fade-in">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className="p-3 bg-emerald-500 text-slate-950 rounded-xl font-black shadow-lg shadow-emerald-500/30">
-                  <CheckCircle2 className="w-6 h-6" />
-                </div>
-                <div>
-                  <div className="text-[10px] font-mono uppercase tracking-widest text-emerald-400 font-extrabold">
-                    TRANSACTION COMPLETE
-                  </div>
-                  <h4 className="text-lg font-black text-white">
-                    ✓ EXIT COMPLETED — Spot {assignedSpot.id} Released
-                  </h4>
-                </div>
-              </div>
-              <span className="px-3 py-1 rounded-full text-xs font-mono font-bold bg-emerald-950 text-emerald-300 border border-emerald-600">
-                TOTAL PAID: {formatINR(bill.totalAmount)}
-              </span>
-            </div>
-
-            <p className="text-xs text-slate-300 leading-relaxed">
-              Thank you for using the Smart EV Parking & Incident Management System! Your session <strong className="text-white font-mono">{parkingSession?.id || 'PARK-1024'}</strong> has been closed and added to your permanent session history. Have a safe journey! 🚗⚡
-            </p>
-
-            <div className="flex items-center gap-3 pt-1">
-              <button
-                type="button"
-                onClick={onViewSessionHistory}
-                className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
-              >
-                <History className="w-4 h-4 text-cyan-400" />
-                <span>View Session History</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={onBackToDashboard}
-                className="px-4 py-2.5 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl text-xs font-bold transition-all cursor-pointer"
-              >
-                Back to Dashboard
-              </button>
-            </div>
-          </div>
-        )}
-
-      </div>
-
-      {/* ------------------------------------------------------------- */}
-      {/* 5. INTERACTIVE MAP & ROUTE VIEW */}
-      {/* ------------------------------------------------------------- */}
-      {(viewFormat === 'both' || viewFormat === 'map') && (
-        <div className="space-y-2">
-          <div className="flex items-center justify-between text-xs text-slate-400 px-1 font-semibold">
-            <span className="flex items-center gap-1.5 text-cyan-400 font-mono">
-              <Compass className="w-4 h-4 animate-spin" /> Live Route Polyline: {isCheckoutRequested ? `Bay ${assignedSpot.id} \u2192 North Exit Gate` : `Entrance Gate (0,0) \u2192 Bay ${assignedSpot.id}`}
-            </span>
-            <span>Real-Time Vehicle Vector Animated</span>
-          </div>
-
+        <div className="relative w-full h-[60dvh] md:h-[400px] bg-slate-950 rounded-xl overflow-hidden border border-slate-800">
           <ParkingMap
-            spots={spots.length > 0 ? spots : [assignedSpot]}
-            assignedSpotId={assignedSpot.id}
-            reports={reports}
-            currentUser={allocationData}
+            spots={spots}
+            activeRoute={{
+              assignedSpotId: allottedBay,
+              distance: distanceTraveled
+            }}
+            assignedSpotId={allottedBay}
+            currentUser={currentUser}
             isAdmin={false}
           />
         </div>
-      )}
+      </div>
 
       {/* ------------------------------------------------------------- */}
-      {/* 6. TURN-BY-TURN WAYFINDING STEPS */}
+      {/* 3. CHARGING TELEMETRY (IF EV) */}
       {/* ------------------------------------------------------------- */}
-      {(viewFormat === 'both' || viewFormat === 'cards') && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-[#0B1120] border border-slate-800 rounded-xl p-4 flex items-start gap-3">
-            <div className="w-7 h-7 rounded-full bg-cyan-950 border border-cyan-500 text-cyan-300 font-bold flex items-center justify-center text-xs shrink-0">
-              1
+      {isEV && (
+        <div className="bg-[#0B1120] border border-cyan-500/30 rounded-2xl p-6 shadow-xl space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+            <div className="flex items-center gap-2">
+              <Zap className="w-5 h-5 text-cyan-400" />
+              <h3 className="text-sm font-bold text-white uppercase tracking-wider font-mono">
+                50kW DC Fast Charging Telemetry
+              </h3>
             </div>
-            <div>
-              <h4 className="text-xs font-bold text-white uppercase">{isCheckoutRequested ? `Depart Bay ${assignedSpot.id}` : 'Entrance Gate (0, 0)'}</h4>
-              <p className="text-xs text-slate-400 mt-1">
-                {isCheckoutRequested ? 'Unplug vehicle cable and pull forward into the transit lane.' : 'Pass RFID barrier. Central Controller automatically assigns coordinates.'}
-              </p>
-            </div>
+            <span className="text-xs font-mono text-emerald-400 font-bold">
+              {portalStatus === 'parked' ? 'Charging Session Active' : 'Pre-Activated'}
+            </span>
           </div>
 
-          <div className="bg-[#0B1120] border border-slate-800 rounded-xl p-4 flex items-start gap-3">
-            <div className="w-7 h-7 rounded-full bg-cyan-950 border border-cyan-500 text-cyan-300 font-bold flex items-center justify-center text-xs shrink-0">
-              2
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div className="p-3 bg-slate-900 rounded-xl border border-slate-800">
+              <span className="text-[10px] text-slate-400 uppercase font-mono">Power Delivery</span>
+              <div className="text-xl font-bold font-mono text-cyan-300 mt-1">50.0 kW</div>
+              <span className="text-[10px] text-slate-500">Dual CCS Pedestal</span>
             </div>
-            <div>
-              <h4 className="text-xs font-bold text-white uppercase">{isCheckoutRequested ? 'Follow North Exit Corridor' : `Drive to Row ${assignedSpot.row}`}</h4>
-              <p className="text-xs text-slate-400 mt-1">
-                {isCheckoutRequested ? 'Drive north along main lane towards Exit Gate barrier.' : `Proceed straight down main transit lane to Row ${assignedSpot.row} junction.`}
-              </p>
-            </div>
-          </div>
 
-          <div className="bg-[#0B1120] border border-emerald-950 rounded-xl p-4 flex items-start gap-3 border-emerald-500/80 bg-emerald-950/20">
-            <div className="w-7 h-7 rounded-full bg-emerald-950 border border-emerald-500 text-emerald-300 font-bold flex items-center justify-center text-xs shrink-0">
-              3
+            <div className="p-3 bg-slate-900 rounded-xl border border-slate-800">
+              <span className="text-[10px] text-slate-400 uppercase font-mono">Battery State</span>
+              <div className="text-xl font-bold font-mono text-emerald-300 mt-1">{batteryLevel}%</div>
+              <span className="text-[10px] text-slate-500">Target: 80% Fast</span>
             </div>
-            <div>
-              <h4 className="text-xs font-bold text-emerald-300 uppercase">{isCheckoutRequested ? 'North Exit Gate (Barrier 01)' : `Park at Bay ${assignedSpot.id}`}</h4>
-              <p className="text-xs text-slate-300 mt-1">
-                {isCheckoutRequested ? 'Camera ANPR / RFID scans clearance and opens exit gate barrier.' : `Turn right into Column ${assignedSpot.col}. Spot illuminated in ${isEV ? 'Electric Blue' : 'Green'}.`}
-              </p>
+
+            <div className="p-3 bg-slate-900 rounded-xl border border-slate-800">
+              <span className="text-[10px] text-slate-400 uppercase font-mono">Estimated Time</span>
+              <div className="text-xl font-bold font-mono text-amber-300 mt-1">{estimate.mins} mins</div>
+              <span className="text-[10px] text-slate-500">to 80% Capacity</span>
+            </div>
+
+            <div className="p-3 bg-slate-900 rounded-xl border border-slate-800">
+              <span className="text-[10px] text-slate-400 uppercase font-mono">Charging Fee</span>
+              <div className="text-xl font-bold font-mono text-white mt-1">{formatINR(estimate.cost)}</div>
+              <span className="text-[10px] text-slate-500">₹18.00 / kWh</span>
             </div>
           </div>
         </div>
@@ -504,17 +616,6 @@ export default function DriverGuidanceView({
           <RotateCcw className="w-4 h-4" />
           <span>Return to Central Map Overview</span>
         </button>
-
-        {!isCheckoutRequested && !isExitVerified && (
-          <button
-            type="button"
-            onClick={onParkVehicle}
-            className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md shadow-emerald-500/20 cursor-pointer"
-          >
-            <CheckCircle2 className="w-4 h-4" />
-            <span>Confirm Vehicle Parked in Bay {assignedSpot.id}</span>
-          </button>
-        )}
       </div>
 
     </div>

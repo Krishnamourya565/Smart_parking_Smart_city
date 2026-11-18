@@ -154,7 +154,7 @@ export default function AnalyticsPanel({ simulationData = null }) {
       </div>
 
       {/* Visual Analytics Charts Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         
         {/* Chart 1: Side-by-Side Benchmark Performance Comparison */}
         <div className="bg-[#0B1120] border border-slate-800 rounded-2xl p-5 shadow-xl">
@@ -173,7 +173,7 @@ export default function AnalyticsPanel({ simulationData = null }) {
             </span>
           </div>
 
-          <div className="h-64 w-full">
+          <div className="h-[220px] md:h-64 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={comparisonData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" vertical={false} />
@@ -208,7 +208,7 @@ export default function AnalyticsPanel({ simulationData = null }) {
             </span>
           </div>
 
-          <div className="h-64 w-full">
+          <div className="h-[220px] md:h-64 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={hourlyOccupancyData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <defs>

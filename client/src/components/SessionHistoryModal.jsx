@@ -73,8 +73,8 @@ export default function SessionHistoryModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fade-in">
-      <div className="bg-[#0B1120] border border-cyan-500/40 rounded-3xl max-w-4xl w-full p-6 shadow-[0_0_50px_rgba(6,182,212,0.25)] relative overflow-hidden flex flex-col max-h-[88vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-slate-950/90 backdrop-blur-md animate-fade-in overflow-y-auto min-h-dvh">
+      <div className="bg-[#0B1120] sm:border sm:border-cyan-500/40 sm:rounded-3xl max-w-4xl w-full p-4 sm:p-6 shadow-2xl relative overflow-hidden flex flex-col min-h-dvh sm:min-h-0 sm:max-h-[90vh] my-auto">
         
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-800 pb-4 mb-4">

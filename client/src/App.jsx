@@ -33,6 +33,7 @@ import LoginModal from './components/LoginModal';
 import ParkingGridMap from './components/ParkingGridMap';
 import ParkingMap from './components/ParkingMap';
 import AnalyticsPanel from './components/AnalyticsPanel';
+import MonitoringPanel from './components/MonitoringPanel';
 import SimulationControl from './components/SimulationControl';
 import LiveArrivalFeed from './components/LiveArrivalFeed';
 import DriverGuidanceView from './components/DriverGuidanceView';
@@ -246,17 +247,20 @@ export default function App() {
     }
   };
 
-  // 2. Customer Login Handler
+  // 2. Customer / Unified Login Handler
   const handleCustomerLogin = async (user, session) => {
-    setCurrentUser({ ...user, role: 'customer' });
+    const role = user?.role === 'admin' ? 'admin' : (user?.role || 'customer');
+    setCurrentUser({ ...user, role });
     setCurrentSession(session);
     setIsLoginOpen(false);
     setViewMode('app');
-    setActiveTab('guidance');
-    showNotification(`Welcome, ${user.name}! Account authenticated.`);
+    setActiveTab(role === 'admin' ? 'monitoring' : 'guidance');
+    showNotification(`Welcome, ${user.name || user.email}! Account authenticated.`);
     
     // Automatically evaluate spot allocation for customer
-    handleRequestCustomerAllocation(user, session);
+    if (role !== 'admin') {
+      handleRequestCustomerAllocation(user, session);
+    }
   };
 
   // 3. Customer Register Handler
@@ -266,7 +270,7 @@ export default function App() {
     setIsLoginOpen(false);
     setViewMode('app');
     setActiveTab('guidance');
-    showNotification(`Account created successfully! Welcome, ${user.name}.`);
+    showNotification(`Account created successfully! Welcome, ${user.name || user.email}.`);
     
     // Automatically evaluate spot allocation
     handleRequestCustomerAllocation(user, session);
@@ -278,8 +282,8 @@ export default function App() {
     setCurrentSession(session);
     setIsLoginOpen(false);
     setViewMode('app');
-    setActiveTab('map');
-    showNotification('System Administrator authenticated. Full Controller & Reports unlocked.');
+    setActiveTab('monitoring');
+    showNotification('System Administrator authenticated. Monitoring Console active.');
   };
 
   // 5. Logout Handler
@@ -576,7 +580,7 @@ export default function App() {
   // VIEW MODE 2: SYSTEM DASHBOARD (APP VIEW)
   // -------------------------------------------------------------
   return (
-    <div className="min-h-screen bg-[#070B14] text-slate-100 flex flex-col font-['Plus_Jakarta_Sans',sans-serif]">
+    <div className="min-h-dvh bg-[#070B14] text-slate-100 flex flex-col font-['Plus_Jakarta_Sans',sans-serif] overflow-x-hidden">
       
       {/* Toast Notification Alert */}
       {notification && (
@@ -619,31 +623,42 @@ export default function App() {
           </div>
 
           {/* Role-Specific Navigation Tabs & Profile Controls */}
-          <div className="flex flex-wrap items-center gap-2.5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 w-full md:w-auto">
             
-            {/* Landing Page Button */}
-            <button
-              onClick={() => setViewMode('landing')}
-              className="px-3 py-1.5 rounded-xl border border-slate-700 bg-slate-900/80 hover:bg-slate-800 text-slate-300 text-xs font-semibold flex items-center gap-1.5 transition-all"
-            >
-              <Home className="w-3.5 h-3.5 text-cyan-400" />
-              <span>Landing Page</span>
-            </button>
+            {/* Landing Page Button & Counter */}
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={() => setViewMode('landing')}
+                className="min-h-[44px] px-3.5 py-2 rounded-xl border border-slate-700 bg-slate-900/80 hover:bg-slate-800 text-slate-300 text-sm font-semibold flex items-center gap-1.5 transition-all"
+              >
+                <Home className="w-4 h-4 text-cyan-400" />
+                <span>Landing</span>
+              </button>
 
-            {/* Active Sessions Counter Badge */}
-            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 border border-slate-800 rounded-xl text-xs text-slate-300">
-              <Users className="w-3.5 h-3.5 text-cyan-400" />
-              <span className="font-mono font-bold text-white">{activeUsers?.totalLoggedIn || 3}</span>
-              <span className="text-slate-400">Online</span>
+              <div className="flex items-center gap-1.5 min-h-[44px] px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-slate-300">
+                <Users className="w-4 h-4 text-cyan-400" />
+                <span className="font-mono font-bold text-white">{activeUsers?.totalLoggedIn || 3}</span>
+                <span className="text-slate-400 hidden sm:inline">Online</span>
+              </div>
             </div>
 
             {/* ADMIN NAVIGATION TABS */}
             {isAdmin ? (
-              <div className="p-1 bg-slate-900 border border-slate-800 rounded-xl flex items-center text-xs font-semibold">
+              <div className="w-full sm:w-auto overflow-x-auto whitespace-nowrap p-1 bg-slate-900 border border-slate-800 rounded-xl flex items-center gap-1 text-sm font-semibold scrollbar-none">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('monitoring')}
+                  className={`min-h-[44px] px-3.5 py-2 rounded-lg transition-all flex items-center gap-1.5 shrink-0 text-sm ${
+                    activeTab === 'monitoring' ? 'bg-cyan-600 text-white shadow' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <Activity className="w-4 h-4" />
+                  <span>Monitoring</span>
+                </button>
                 <button
                   type="button"
                   onClick={() => setActiveTab('map')}
-                  className={`px-3 py-1 rounded-lg transition-all ${
+                  className={`min-h-[44px] px-3.5 py-2 rounded-lg transition-all shrink-0 text-sm ${
                     activeTab === 'map' ? 'bg-cyan-600 text-white shadow' : 'text-slate-400 hover:text-white'
                   }`}
                 >
@@ -652,17 +667,17 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => setActiveTab('gps_map')}
-                  className={`px-3 py-1 rounded-lg transition-all flex items-center gap-1 ${
+                  className={`min-h-[44px] px-3.5 py-2 rounded-lg transition-all flex items-center gap-1.5 shrink-0 text-sm ${
                     activeTab === 'gps_map' ? 'bg-cyan-600 text-white shadow' : 'text-slate-400 hover:text-white'
                   }`}
                 >
-                  <MapPin className="w-3.5 h-3.5" />
+                  <MapPin className="w-4 h-4" />
                   <span>Live GPS Map</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setActiveTab('analytics')}
-                  className={`px-3 py-1 rounded-lg transition-all ${
+                  className={`min-h-[44px] px-3.5 py-2 rounded-lg transition-all shrink-0 text-sm ${
                     activeTab === 'analytics' ? 'bg-cyan-600 text-white shadow' : 'text-slate-400 hover:text-white'
                   }`}
                 >
@@ -671,51 +686,51 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => setActiveTab('customers')}
-                  className={`px-3 py-1 rounded-lg transition-all flex items-center gap-1 ${
+                  className={`min-h-[44px] px-3.5 py-2 rounded-lg transition-all flex items-center gap-1.5 shrink-0 text-sm ${
                     activeTab === 'customers' ? 'bg-emerald-600 text-white shadow' : 'text-slate-400 hover:text-white'
                   }`}
                 >
-                  <Users className="w-3.5 h-3.5" />
+                  <Users className="w-4 h-4" />
                   <span>Customers</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setActiveTab('reports')}
-                  className={`px-3 py-1 rounded-lg transition-all flex items-center gap-1 ${
+                  className={`min-h-[44px] px-3.5 py-2 rounded-lg transition-all flex items-center gap-1.5 shrink-0 text-sm ${
                     activeTab === 'reports' ? 'bg-amber-600 text-white shadow' : 'text-slate-400 hover:text-white'
                   }`}
                 >
-                  <FileText className="w-3.5 h-3.5" />
+                  <FileText className="w-4 h-4" />
                   <span>Reports</span>
                 </button>
               </div>
             ) : (
               /* CUSTOMER NAVIGATION TABS */
-              <div className="p-1 bg-slate-900 border border-slate-800 rounded-xl flex items-center text-xs font-semibold">
+              <div className="w-full sm:w-auto overflow-x-auto whitespace-nowrap p-1 bg-slate-900 border border-slate-800 rounded-xl flex items-center gap-1 text-sm font-semibold scrollbar-none">
                 <button
                   type="button"
                   onClick={() => setActiveTab('guidance')}
-                  className={`px-3 py-1 rounded-lg transition-all flex items-center gap-1.5 ${
+                  className={`min-h-[44px] px-3.5 py-2 rounded-lg transition-all flex items-center gap-1.5 shrink-0 text-sm ${
                     activeTab === 'guidance' ? 'bg-cyan-600 text-white shadow' : 'text-slate-400 hover:text-white'
                   }`}
                 >
-                  <Compass className="w-3.5 h-3.5" />
+                  <Compass className="w-4 h-4" />
                   <span>My Guidance</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setActiveTab('gps_map')}
-                  className={`px-3 py-1 rounded-lg transition-all flex items-center gap-1.5 ${
+                  className={`min-h-[44px] px-3.5 py-2 rounded-lg transition-all flex items-center gap-1.5 shrink-0 text-sm ${
                     activeTab === 'gps_map' ? 'bg-cyan-600 text-white shadow' : 'text-slate-400 hover:text-white'
                   }`}
                 >
-                  <MapPin className="w-3.5 h-3.5" />
+                  <MapPin className="w-4 h-4" />
                   <span>Live GPS Map</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setActiveTab('map')}
-                  className={`px-3 py-1 rounded-lg transition-all ${
+                  className={`min-h-[44px] px-3.5 py-2 rounded-lg transition-all shrink-0 text-sm ${
                     activeTab === 'map' ? 'bg-cyan-600 text-white shadow' : 'text-slate-400 hover:text-white'
                   }`}
                 >
@@ -724,35 +739,38 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => setActiveTab('reports')}
-                  className={`px-3 py-1 rounded-lg transition-all flex items-center gap-1.5 ${
+                  className={`min-h-[44px] px-3.5 py-2 rounded-lg transition-all flex items-center gap-1.5 shrink-0 text-sm ${
                     activeTab === 'reports' ? 'bg-cyan-600 text-white shadow' : 'text-slate-400 hover:text-white'
                   }`}
                 >
-                  <FileText className="w-3.5 h-3.5" />
+                  <FileText className="w-4 h-4" />
                   <span>Submit Report</span>
                 </button>
               </div>
             )}
 
-            {/* Session History Modal Button */}
-            <button
-              type="button"
-              onClick={() => setIsSessionHistoryOpen(true)}
-              className="px-3 py-1.5 rounded-xl border border-slate-700 bg-slate-900/80 hover:bg-slate-800 text-slate-300 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer"
-            >
-              <History className="w-3.5 h-3.5 text-cyan-400" />
-              <span>Session History</span>
-            </button>
+            {/* Action buttons */}
+            <div className="flex items-center gap-2 shrink-0">
+              {/* Session History Modal Button */}
+              <button
+                type="button"
+                onClick={() => setIsSessionHistoryOpen(true)}
+                className="min-h-[44px] px-3 py-2 rounded-xl border border-slate-700 bg-slate-900/80 hover:bg-slate-800 text-slate-300 text-sm font-semibold flex items-center gap-1.5 transition-all cursor-pointer"
+              >
+                <History className="w-4 h-4 text-cyan-400" />
+                <span className="hidden sm:inline">History</span>
+              </button>
 
-            {/* Slide Deck Presentation Modal Button */}
-            <button
-              type="button"
-              onClick={() => setIsPresentationOpen(true)}
-              className="px-3 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md shadow-emerald-600/20"
-            >
-              <Presentation className="w-3.5 h-3.5" />
-              <span>Slide Deck</span>
-            </button>
+              {/* Slide Deck Presentation Modal Button */}
+              <button
+                type="button"
+                onClick={() => setIsPresentationOpen(true)}
+                className="min-h-[44px] px-3 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-sm font-bold flex items-center gap-1.5 shadow-md shadow-emerald-600/20"
+              >
+                <Presentation className="w-4 h-4" />
+                <span className="hidden sm:inline">Deck</span>
+              </button>
+            </div>
 
             {/* User Profile Pill & Log Out */}
             {currentUser ? (
@@ -802,6 +820,11 @@ export default function App() {
       {/* Main App Body */}
       <main className="flex-1 max-w-7xl mx-auto w-full p-4 lg:p-8 space-y-6">
         
+        {/* TAB: ADMIN-ONLY MONITORING CONSOLE */}
+        {isAdmin && activeTab === 'monitoring' && (
+          <MonitoringPanel currentUser={currentUser} />
+        )}
+
         {/* TAB: REPORTS SECTION (CUSTOMER SUBMIT + ADMIN REVIEW) */}
         {activeTab === 'reports' && (
           <ReportsPanel
