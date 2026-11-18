@@ -9,8 +9,7 @@
     "client": "npm --prefix client run dev",
     "simulate": "python simulation/smart_parking_simulation.py",
     "monitor": "npm --prefix server run monitor",
-    "build": "npm --prefix client run build",
-    "postinstall": "npm --prefix client install"
+    "build": "npm --prefix client run build"
   },
   "keywords": [
     "smart-parking",
