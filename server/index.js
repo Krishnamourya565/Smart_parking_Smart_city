@@ -148,26 +148,27 @@ app.post('/api/auth/login', async (req, res) => {
       const cleanDigits = cleanIdent.replace(/\D/g, '');
 
       const { data: dbCustomers, error } = await supabase
-        .from('customers')
-        .select('*');
+        .from('profiles')
+        .select('*, vehicles(*)');
 
       if (!error && dbCustomers && dbCustomers.length > 0) {
         const found = dbCustomers.find(c => 
           (c.email && c.email.toLowerCase() === cleanLower) ||
+          (c.vehicles?.[0]?.plate && c.vehicles[0].plate.toUpperCase() === cleanUpper) ||
           (c.vehicle_plate && c.vehicle_plate.toUpperCase() === cleanUpper) ||
-          (c.name && c.name.toLowerCase() === cleanLower) ||
+          ((c.full_name || c.name) && (c.full_name || c.name).toLowerCase() === cleanLower) ||
           (cleanDigits.length >= 10 && c.phone && c.phone.replace(/\D/g, '').endsWith(cleanDigits.slice(-10)))
         );
 
         if (found) {
           const mappedCustomer = {
             id: found.id,
-            name: found.name,
-            email: found.email,
+            name: found.full_name || found.name || 'Driver',
+            email: found.email || '',
             phone: found.phone || '',
             password: found.password || 'password123',
-            vehiclePlate: found.vehicle_plate,
-            vehicleType: found.vehicle_type || 'EV',
+            vehiclePlate: found.vehicles?.[0]?.plate || found.vehicle_plate || 'MH12-EV-2026',
+            vehicleType: found.vehicles?.[0]?.type || found.vehicle_type || 'EV',
             batteryLevel: found.battery_level !== null ? Number(found.battery_level) : 50,
             status: found.status || 'active',
             totalSessions: found.total_sessions || found.total_bookings || 0,
@@ -268,16 +269,16 @@ app.post('/api/auth/logout', (req, res) => {
 app.get('/api/admin/customers', async (req, res) => {
   if (supabase && state.customers.length === 0) {
     try {
-      const { data: dbCustomers, error } = await supabase.from('customers').select('*');
+      const { data: dbCustomers, error } = await supabase.from('profiles').select('*, vehicles(*)');
       if (!error && dbCustomers && dbCustomers.length > 0) {
         state.customers = dbCustomers.map(found => ({
           id: found.id,
-          name: found.name,
-          email: found.email,
+          name: found.full_name || found.name || 'Driver',
+          email: found.email || '',
           phone: found.phone || '',
           password: found.password || 'password123',
-          vehiclePlate: found.vehicle_plate,
-          vehicleType: found.vehicle_type || 'EV',
+          vehiclePlate: found.vehicles?.[0]?.plate || found.vehicle_plate || 'MH12-EV-2026',
+          vehicleType: found.vehicles?.[0]?.type || found.vehicle_type || 'EV',
           batteryLevel: found.battery_level !== null ? Number(found.battery_level) : 50,
           status: found.status || 'active',
           totalSessions: found.total_sessions || found.total_bookings || 0,

@@ -110,11 +110,11 @@ export default function MonitoringPanel({ currentUser = null }) {
       setIsLoadingSessions(true);
       try {
         if (supabase) {
-          // Fetch parking_sessions with location name fallback
+          // Fetch parking_sessions with joined profile & vehicle
           const { data, error } = await supabase
             .from('parking_sessions')
-            .select('*')
-            .order('entry_time', { ascending: false })
+            .select('*, profiles(full_name, role), vehicles(plate)')
+            .order('created_at', { ascending: false })
             .limit(25);
 
           if (!error && data && data.length > 0) {
@@ -433,20 +433,20 @@ export default function MonitoringPanel({ currentUser = null }) {
               {sessions.map((sess) => (
                 <tr key={sess.id} className="hover:bg-slate-900/50 transition-colors">
                   <td className="px-4 py-3 font-bold text-white">
-                    {sess.customer_name || 'Driver'}
+                    {sess.profiles?.full_name || sess.customer_name || 'Driver'}
                   </td>
                   <td className="px-4 py-3 text-slate-400 font-mono text-[11px]">
                     {sess.customer_email || 'driver@user.in'}
                   </td>
                   <td className="px-4 py-3 font-mono text-cyan-300 font-bold">
-                    {sess.vehicle_plate || 'MH12-EV-2026'}
+                    {sess.vehicles?.plate || sess.vehicle_plate || 'MH12-EV-2026'}
                   </td>
                   <td className="px-4 py-3 text-slate-300">
                     {sess.location_name || 'Central Urban Facility'}
                   </td>
                   <td className="px-4 py-3 font-mono font-black text-white">
                     <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-700">
-                      {sess.spot_id || sess.bay_id || 'EV01'}
+                      {sess.bay_id || sess.spot_id || 'EV01'}
                     </span>
                   </td>
                   <td className="px-4 py-3">

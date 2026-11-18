@@ -236,20 +236,23 @@ export default function LoginModal({
           createdUser = authData.user;
           createdSession = authData.session;
 
-          // Insert or update profiles with strict role 'user'
+          // Insert or update profiles with strict role 'user' and vehicles
           try {
             await supabase.from('profiles').upsert({
               id: authData.user.id,
-              name,
-              email,
-              vehicle_plate: vehiclePlate,
-              vehicle_type: regType,
+              full_name: name,
               phone: `+91 ${cleanPhoneDigits}`,
               role: 'user',
               updated_at: new Date().toISOString()
             });
+
+            await supabase.from('vehicles').insert({
+              owner_id: authData.user.id,
+              plate: vehiclePlate,
+              type: regType === 'EV' ? 'EV' : 'ICE'
+            });
           } catch (profErr) {
-            console.warn('Profile creation log:', profErr);
+            console.warn('Profile & vehicle creation log:', profErr);
           }
         }
       }

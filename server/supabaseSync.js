@@ -1,6 +1,14 @@
 /**
- * Supabase Real-Time Synchronization Layer
- * Synchronizes in-memory Smart Parking state with live Supabase PostgreSQL tables.
+ * supabaseSync.js
+ *
+ * Real-time bidirectional database synchronization with Supabase:
+ * Updated for Normalized Architecture v2:
+ * - parking_bays
+ * - profiles
+ * - vehicles
+ * - parking_sessions
+ * - session_events
+ * - reports
  */
 
 const { supabase } = require('./supabase');
@@ -8,150 +16,146 @@ const { supabase } = require('./supabase');
 async function syncSpotToSupabase(spot) {
   if (!supabase || !spot) return;
   try {
-    const { error } = await supabase
+    const bayType = spot.type === 'ev' ? 'EV' : 'regular';
+    // Sync to parking_bays
+    await supabase
+      .from('parking_bays')
+      .upsert({
+        id: spot.id,
+        location_id: '00000000-0000-0000-0000-000000000001',
+        bay_type: bayType,
+        status: spot.isFaulty ? 'faulty' : (spot.status || 'free')
+      }, { onConflict: 'id' });
+
+    // Fallback sync to spots table if still queried
+    await supabase
       .from('spots')
       .upsert({
         id: spot.id,
-        name: spot.name,
-        type: spot.type,
-        row: spot.row,
-        col: spot.col,
-        x: spot.x,
-        y: spot.y,
-        distance_from_gate: spot.distanceFromGate,
-        status: spot.status,
-        is_faulty: Boolean(spot.isFaulty),
-        occupied_by: spot.occupiedBy,
-        reserved_until: spot.reservedUntil,
+        status: spot.isFaulty ? 'faulty' : (spot.status || 'free'),
+        is_faulty: spot.isFaulty || false,
+        occupied_by: spot.occupiedBy || null,
+        reserved_until: spot.reservedUntil || null,
         updated_at: new Date().toISOString()
       }, { onConflict: 'id' });
-
-    if (error) {
-      console.error(`[Supabase Sync] Failed to update spot ${spot.id}:`, error.message);
-    }
   } catch (err) {
-    console.error(`[Supabase Sync] Error syncing spot ${spot.id}:`, err.message);
+    console.error(`[Supabase Sync] Error syncing bay ${spot.id}:`, err.message);
   }
 }
 
 async function syncAllSpotsToSupabase(spots) {
-  if (!supabase || !spots || !spots.length) return;
+  if (!supabase || !Array.isArray(spots) || spots.length === 0) return;
   try {
-    const formatted = spots.map(s => ({
+    const formattedBays = spots.map(s => ({
       id: s.id,
-      name: s.name,
-      type: s.type,
-      row: s.row,
-      col: s.col,
-      x: s.x,
-      y: s.y,
-      distance_from_gate: s.distanceFromGate,
-      status: s.status,
-      is_faulty: Boolean(s.isFaulty),
-      occupied_by: s.occupiedBy,
-      reserved_until: s.reservedUntil,
-      updated_at: new Date().toISOString()
+      location_id: '00000000-0000-0000-0000-000000000001',
+      bay_type: s.type === 'ev' ? 'EV' : 'regular',
+      status: s.isFaulty ? 'faulty' : (s.status || 'free')
     }));
 
-    const { error } = await supabase
-      .from('spots')
-      .upsert(formatted, { onConflict: 'id' });
+    await supabase
+      .from('parking_bays')
+      .upsert(formattedBays, { onConflict: 'id' });
 
-    if (error) {
-      console.error('[Supabase Sync] Failed to sync all spots:', error.message);
-    } else {
-      console.log(`[Supabase Sync] Successfully synchronized all ${spots.length} spots.`);
-    }
+    console.log(`[Supabase Sync] Successfully synchronized all ${spots.length} bays to parking_bays.`);
   } catch (err) {
-    console.error('[Supabase Sync] Error syncing all spots:', err.message);
+    console.error('[Supabase Sync] Error syncing all bays:', err.message);
   }
 }
 
 async function syncCustomerToSupabase(customer) {
   if (!supabase || !customer) return;
   try {
-    const { error } = await supabase
-      .from('customers')
+    // 1. Sync to profiles
+    const role = customer.role === 'admin' ? 'admin' : 'user';
+    await supabase
+      .from('profiles')
       .upsert({
         id: customer.id,
-        name: customer.name,
-        email: customer.email,
+        full_name: customer.name || customer.fullName,
         phone: customer.phone || '',
-        password: customer.password || 'password123',
-        vehicle_plate: customer.vehiclePlate,
-        vehicle_type: customer.vehicleType,
-        battery_level: customer.batteryLevel,
-        status: customer.status || 'active',
-        total_bookings: customer.totalBookings || 0,
-        total_spent: customer.totalSpent || 0,
-        last_login: customer.lastLogin || new Date().toISOString()
+        role: role,
+        updated_at: new Date().toISOString()
       }, { onConflict: 'id' });
 
-    if (error) {
-      console.error(`[Supabase Sync] Failed to upsert customer ${customer.id}:`, error.message);
+    // 2. Sync to vehicles if plate is present
+    if (customer.vehiclePlate) {
+      const vType = (customer.vehicleType || '').toUpperCase().includes('EV') ? 'EV' : 'ICE';
+      await supabase
+        .from('vehicles')
+        .upsert({
+          owner_id: customer.id,
+          plate: customer.vehiclePlate,
+          type: vType
+        }, { onConflict: 'owner_id' });
     }
   } catch (err) {
-    console.error(`[Supabase Sync] Error syncing customer ${customer.id}:`, err.message);
+    console.error(`[Supabase Sync] Error syncing profile/vehicle for ${customer.id}:`, err.message);
   }
 }
 
 async function syncParkingSessionToSupabase(session) {
   if (!supabase || !session) return;
   try {
-    let dbStatus = 'active';
+    let dbStatus = 'en_route';
     const s = (session.status || '').toLowerCase();
     if (s.includes('complete') || session.exitTime) {
       dbStatus = 'completed';
-    } else if (s.includes('cancel')) {
-      dbStatus = 'cancelled';
+    } else if (s.includes('exit')) {
+      dbStatus = 'exiting';
+    } else if (s.includes('park') || s.includes('charg')) {
+      dbStatus = 'parked';
+    } else if (s.includes('route')) {
+      dbStatus = 'en_route';
     }
+
+    const userId = session.customerId && session.customerId !== 'CUST-GUEST' ? session.customerId : (session.userId || null);
+    const bayId = session.spotId || session.bayId || session.spot_id || session.bay_id || null;
 
     const { error } = await supabase
       .from('parking_sessions')
       .upsert({
         id: session.id,
-        customer_id: session.customerId && session.customerId !== 'CUST-GUEST' ? session.customerId : null,
-        customer_name: session.customerName,
-        vehicle_plate: session.vehiclePlate,
-        vehicle_type: session.vehicleType,
-        spot_id: session.spotId,
-        battery_level: session.batteryLevel || 20,
-        entry_time: session.entryTime || new Date().toISOString(),
-        exit_time: session.exitTime || null,
-        duration_minutes: session.durationMinutes || session.parkingDurationMinutes || 0,
-        energy_kwh: session.energyDeliveredKWh || session.energyUsedKwh || 0,
-        amount_paid: session.amountPaid || session.totalAmount || 0,
-        status: dbStatus
+        user_id: userId,
+        bay_id: bayId,
+        status: dbStatus,
+        kwh: session.energyDeliveredKWh || session.energyUsedKwh || session.kwh || 0,
+        fee: session.amountPaid || session.totalAmount || session.fee || 0,
+        created_at: session.entryTime || session.created_at || new Date().toISOString(),
+        completed_at: session.exitTime || session.completed_at || null
       }, { onConflict: 'id' });
 
     if (error) {
-      console.error(`[Supabase Sync] Failed to upsert session ${session.id}:`, error.message);
+      console.error(`[Supabase Sync] Failed to upsert parking_sessions ${session.id}:`, error.message);
+    } else {
+      // Also log event to session_events
+      await supabase.from('session_events').insert({
+        session_id: session.id,
+        status: dbStatus,
+        created_at: new Date().toISOString()
+      });
     }
   } catch (err) {
-    console.error(`[Supabase Sync] Error syncing session ${session.id}:`, err.message);
+    console.error(`[Supabase Sync] Error syncing parking_sessions ${session.id}:`, err.message);
   }
 }
 
 async function syncReportToSupabase(report) {
   if (!supabase || !report) return;
   try {
+    const userId = report.customerId || report.userId || null;
+    const bayId = report.spotId || report.bayId || null;
+
     const { error } = await supabase
       .from('reports')
       .upsert({
         id: report.id,
-        title: report.title,
-        category: report.category,
-        spot_id: report.spotId,
-        priority: report.priority,
-        status: report.status,
-        customer_id: report.customerId,
-        customer_name: report.customerName,
-        customer_email: report.customerEmail,
-        vehicle_plate: report.vehiclePlate,
-        description: report.description,
-        admin_notes: report.adminNotes || '',
-        submitted_at: report.submittedAt || new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        user_id: userId,
+        bay_id: bayId,
+        category: report.category || 'General',
+        status: report.status || 'Pending',
+        description: report.description || report.title || '',
+        created_at: report.submittedAt || report.created_at || new Date().toISOString()
       }, { onConflict: 'id' });
 
     if (error) {
@@ -169,4 +173,3 @@ module.exports = {
   syncParkingSessionToSupabase,
   syncReportToSupabase
 };
-

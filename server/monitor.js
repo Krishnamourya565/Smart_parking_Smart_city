@@ -90,10 +90,10 @@ async function runCheck() {
   const timestamp = new Date().toLocaleTimeString();
 
   const [spotsRes, custRes, sessRes, repRes] = await Promise.all([
-    fetchTable('spots'),
-    fetchTable('customers'),
-    fetchTable('parking_sessions', 'order=entry_time.desc'),
-    fetchTable('reports', 'order=submitted_at.desc')
+    fetchTable('parking_bays'),
+    fetchTable('profiles'),
+    fetchTable('parking_sessions', 'order=created_at.desc'),
+    fetchTable('reports', 'order=created_at.desc')
   ]);
 
   if (!spotsRes.ok && spotsRes.error.includes('does not exist')) {

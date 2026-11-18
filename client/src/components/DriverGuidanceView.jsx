@@ -134,9 +134,9 @@ export default function DriverGuidanceView({
           const { data, error } = await supabase
             .from('parking_sessions')
             .select('*')
-            .or(`customer_id.eq.${userId},vehicle_plate.eq.${currentUser.vehiclePlate || currentUser.vehicle_plate}`)
+            .or(`user_id.eq.${userId},customer_id.eq.${userId}`)
             .neq('status', 'completed')
-            .order('entry_time', { ascending: false })
+            .order('created_at', { ascending: false })
             .limit(1)
             .maybeSingle();
 
@@ -192,14 +192,12 @@ export default function DriverGuidanceView({
         sessionId = `sess_${Date.now()}`;
         const newSessionRecord = {
           id: sessionId,
-          customer_id: currentUser?.id || currentUser?.email || 'guest',
-          customer_name: currentUser?.name || 'Driver',
-          vehicle_plate: currentUser?.vehiclePlate || currentUser?.vehicle_plate || 'MH12-EV-2026',
-          vehicle_type: currentUser?.vehicleType || 'EV',
-          spot_id: allottedBay,
-          battery_level: currentUser?.batteryLevel || 25,
-          entry_time: timestamp,
-          status: 'en_route'
+          user_id: currentUser?.id || null,
+          bay_id: allottedBay,
+          status: 'en_route',
+          kwh: 0.00,
+          fee: 0.00,
+          created_at: timestamp
         };
 
         if (supabase) {
@@ -217,7 +215,7 @@ export default function DriverGuidanceView({
             .from('parking_sessions')
             .update({ 
               status: targetStatus,
-              ...(targetStatus === 'completed' ? { exit_time: timestamp } : {})
+              ...(targetStatus === 'completed' ? { completed_at: timestamp } : {})
             })
             .eq('id', sessionId);
         } catch (updateErr) {
@@ -230,14 +228,8 @@ export default function DriverGuidanceView({
         try {
           await supabase.from('session_events').insert({
             session_id: sessionId,
-            event_type: targetStatus,
-            timestamp,
-            details: {
-              bay: allottedBay,
-              vehicle_plate: currentUser?.vehiclePlate || currentUser?.vehicle_plate,
-              location_id: selectedLocationId,
-              status: targetStatus
-            }
+            status: targetStatus,
+            created_at: timestamp
           });
         } catch (evErr) {
           console.warn('session_events insert notice:', evErr);
@@ -254,17 +246,21 @@ export default function DriverGuidanceView({
             try {
               await supabase
                 .from('parking_sessions')
-                .update({ status: 'completed', exit_time: new Date().toISOString() })
+                .update({ status: 'completed', completed_at: new Date().toISOString() })
                 .eq('id', sessionId);
 
               await supabase.from('session_events').insert({
                 session_id: sessionId,
-                event_type: 'completed',
-                timestamp: new Date().toISOString(),
-                details: { bay: allottedBay, action: 'bay_freed' }
+                status: 'completed',
+                created_at: new Date().toISOString()
               });
 
-              // Free the spot in spots table if present
+              // Free the bay in parking_bays & spots tables
+              await supabase
+                .from('parking_bays')
+                .update({ status: 'free' })
+                .eq('id', allottedBay);
+
               await supabase
                 .from('spots')
                 .update({ status: 'free', occupied_by: null })
