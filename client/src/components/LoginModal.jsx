@@ -49,7 +49,7 @@ export default function LoginModal({
   const [loginPassword, setLoginPassword] = useState('');
   const [showLoginPassword, setShowLoginPassword] = useState(false);
 
-  // Sign Up Form State (User Only - No Admin Option)
+  // Sign Up Form State (Drivers)
   const [regName, setRegName] = useState('');
   const [regEmail, setRegEmail] = useState('');
   const [regPhone, setRegPhone] = useState('');
@@ -58,6 +58,14 @@ export default function LoginModal({
   const [regBattery, setRegBattery] = useState(25);
   const [regPassword, setRegPassword] = useState('');
   const [showRegPassword, setShowRegPassword] = useState(false);
+
+  // Sign Up Form State (Administrators)
+  const [adminName, setAdminName] = useState('');
+  const [adminEmail, setAdminEmail] = useState('');
+  const [adminPhone, setAdminPhone] = useState('');
+  const [adminDept, setAdminDept] = useState('Central Traffic Control');
+  const [adminPassword, setAdminPassword] = useState('');
+  const [showAdminPassword, setShowAdminPassword] = useState(false);
 
   const [errorMessage, setErrorMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -279,6 +287,111 @@ export default function LoginModal({
     }
   };
 
+  // Sign Up Submit: Administrator Registration
+  const handleAdminSignUpSubmit = async (e) => {
+    e.preventDefault();
+    setErrorMessage('');
+
+    const cleanPhoneDigits = adminPhone.replace(/\D/g, '');
+    if (cleanPhoneDigits.length !== 10) {
+      setErrorMessage('Please enter a valid 10-digit phone number.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const email = adminEmail.trim();
+      const password = adminPassword;
+      const name = adminName.trim();
+
+      let createdUser = null;
+      let createdSession = null;
+
+      if (supabase) {
+        const { data: authData, error: authError } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              name,
+              full_name: name,
+              role: 'admin',
+              phone: `+91 ${cleanPhoneDigits}`,
+              department: adminDept
+            }
+          }
+        });
+
+        if (authError) {
+          // Fallback to backend registration
+          const fallbackRes = await fetch('/api/admin/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              name,
+              email,
+              phone: `+91 ${cleanPhoneDigits}`,
+              department: adminDept,
+              password
+            })
+          });
+          const fallbackData = await fallbackRes.json();
+          if (fallbackData.success) {
+            createdUser = fallbackData.user;
+            createdSession = fallbackData.session;
+          } else {
+            throw new Error(authError.message || fallbackData.message || 'Admin registration failed.');
+          }
+        } else if (authData?.user) {
+          createdUser = authData.user;
+          createdSession = authData.session;
+
+          try {
+            await supabase.from('profiles').upsert({
+              id: authData.user.id,
+              full_name: name,
+              phone: `+91 ${cleanPhoneDigits}`,
+              role: 'admin',
+              updated_at: new Date().toISOString()
+            });
+
+            await supabase.from('admin_allowlist').upsert({
+              email: email
+            });
+          } catch (profErr) {
+            console.warn('Admin profile upsert:', profErr);
+          }
+        }
+      }
+
+      if (!createdUser) {
+        createdUser = {
+          id: `ADMIN-${Date.now().toString().slice(-4)}`,
+          name,
+          email,
+          phone: `+91 ${cleanPhoneDigits}`,
+          role: 'admin'
+        };
+      }
+
+      const mergedAdmin = {
+        id: createdUser.id,
+        name: name,
+        email: email,
+        phone: `+91 ${cleanPhoneDigits}`,
+        role: 'admin',
+        department: adminDept
+      };
+
+      onAdminLogin(mergedAdmin, createdSession);
+      onClose();
+    } catch (err) {
+      setErrorMessage(err.message || 'Admin registration failed.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-slate-950/90 backdrop-blur-md overflow-y-auto min-h-dvh">
       <div className="relative w-full max-w-lg min-h-dvh sm:min-h-0 bg-[#070B14] sm:border sm:border-cyan-500/40 sm:rounded-3xl p-5 sm:p-8 shadow-2xl overflow-y-auto flex flex-col justify-center my-auto">
@@ -310,12 +423,12 @@ export default function LoginModal({
           </div>
         </div>
 
-        {/* Auth Mode Toggle Tabs (Sign In vs Sign Up - No Admin Tab) */}
-        <div className="grid grid-cols-2 p-1 mb-6 bg-slate-900/90 border border-slate-800 rounded-xl text-xs font-semibold">
+        {/* Auth Mode Toggle Tabs (Sign In vs Driver Sign Up vs Admin Sign Up) */}
+        <div className="grid grid-cols-3 p-1 mb-6 bg-slate-900/90 border border-slate-800 rounded-xl text-xs font-semibold gap-1">
           <button
             type="button"
             onClick={() => { setAuthMode('login'); setErrorMessage(''); }}
-            className={`min-h-[44px] py-2 rounded-lg transition-all flex items-center justify-center gap-1.5 text-sm ${
+            className={`min-h-[44px] py-2 px-1 rounded-lg transition-all flex items-center justify-center gap-1.5 text-xs sm:text-sm ${
               authMode === 'login' ? 'bg-cyan-600 text-white shadow' : 'text-slate-400 hover:text-white'
             }`}
           >
@@ -326,12 +439,23 @@ export default function LoginModal({
           <button
             type="button"
             onClick={() => { setAuthMode('register'); setErrorMessage(''); }}
-            className={`min-h-[44px] py-2 rounded-lg transition-all flex items-center justify-center gap-1.5 text-sm ${
-              authMode === 'register' ? 'bg-cyan-600 text-white shadow' : 'text-slate-400 hover:text-white'
+            className={`min-h-[44px] py-2 px-1 rounded-lg transition-all flex items-center justify-center gap-1.5 text-xs sm:text-sm ${
+              authMode === 'register' ? 'bg-emerald-600 text-white shadow' : 'text-slate-400 hover:text-white'
             }`}
           >
             <UserPlus className="w-3.5 h-3.5" />
-            <span>Sign Up (Drivers)</span>
+            <span>Driver Sign Up</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => { setAuthMode('admin_register'); setErrorMessage(''); }}
+            className={`min-h-[44px] py-2 px-1 rounded-lg transition-all flex items-center justify-center gap-1.5 text-xs sm:text-sm ${
+              authMode === 'admin_register' ? 'bg-purple-600 text-white shadow' : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <Shield className="w-3.5 h-3.5" />
+            <span>Admin Sign Up</span>
           </button>
         </div>
 
@@ -546,6 +670,121 @@ export default function LoginModal({
             >
               <span>{isSubmitting ? 'Registering Account...' : 'Create Driver Profile'}</span>
               <CheckCircle2 className="w-4 h-4" />
+            </button>
+          </form>
+        )}
+
+        {/* 3. SIGN UP FORM (Administrator Registration) */}
+        {authMode === 'admin_register' && (
+          <form onSubmit={handleAdminSignUpSubmit} className="space-y-3.5">
+            <div className="p-3 rounded-xl bg-purple-950/50 border border-purple-500/60 text-purple-200 text-xs flex items-center gap-2">
+              <Shield className="w-4 h-4 text-purple-400 shrink-0" />
+              <span>Register as a Municipal Mobility Administrator with full telemetry, simulation, and manual bay control.</span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  Full Name
+                </label>
+                <div className="relative">
+                  <User className="absolute left-3 top-2.5 w-4 h-4 text-slate-500" />
+                  <input
+                    type="text"
+                    required
+                    value={adminName}
+                    onChange={(e) => setAdminName(e.target.value)}
+                    placeholder="Officer Vikram Rao"
+                    className="w-full min-h-[44px] pl-9 pr-3 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-base text-white placeholder-slate-500 focus:outline-none focus:border-purple-400"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  Official Email
+                </label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-2.5 w-4 h-4 text-slate-500" />
+                  <input
+                    type="email"
+                    required
+                    value={adminEmail}
+                    onChange={(e) => setAdminEmail(e.target.value)}
+                    placeholder="admin@urban.gov"
+                    className="w-full min-h-[44px] pl-9 pr-3 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-base text-white placeholder-slate-500 focus:outline-none focus:border-purple-400"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  Mobile (+91)
+                </label>
+                <div className="relative">
+                  <Phone className="absolute left-3 top-2.5 w-4 h-4 text-slate-500" />
+                  <input
+                    type="tel"
+                    required
+                    value={adminPhone}
+                    onChange={(e) => setAdminPhone(e.target.value)}
+                    placeholder="9876543210"
+                    maxLength={10}
+                    className="w-full min-h-[44px] pl-9 pr-3 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-base text-white placeholder-slate-500 focus:outline-none focus:border-purple-400"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  Department / Authority
+                </label>
+                <div className="relative">
+                  <Shield className="absolute left-3 top-2.5 w-4 h-4 text-slate-500" />
+                  <input
+                    type="text"
+                    value={adminDept}
+                    onChange={(e) => setAdminDept(e.target.value)}
+                    placeholder="Central Traffic Authority"
+                    className="w-full min-h-[44px] pl-9 pr-3 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-base text-white placeholder-slate-500 focus:outline-none focus:border-purple-400"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1">
+                Admin Password
+              </label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-2.5 w-4 h-4 text-slate-500" />
+                <input
+                  type={showAdminPassword ? 'text' : 'password'}
+                  required
+                  value={adminPassword}
+                  onChange={(e) => setAdminPassword(e.target.value)}
+                  placeholder="Create secure admin password"
+                  className="w-full min-h-[44px] pl-9 pr-9 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-base text-white placeholder-slate-500 focus:outline-none focus:border-purple-400"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowAdminPassword(!showAdminPassword)}
+                  className="absolute right-3 top-2.5 text-slate-500 hover:text-slate-300"
+                >
+                  {showAdminPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="w-full min-h-[44px] mt-2 py-3 bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 hover:from-purple-500 text-white font-bold text-base rounded-xl shadow-lg shadow-purple-600/30 flex items-center justify-center gap-2 transition-all disabled:opacity-50 cursor-pointer"
+            >
+              <Shield className="w-4 h-4" />
+              <span>{isSubmitting ? 'Creating Administrator...' : 'Create Admin Profile'}</span>
             </button>
           </form>
         )}

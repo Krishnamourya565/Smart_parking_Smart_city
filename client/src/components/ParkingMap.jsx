@@ -48,7 +48,8 @@ export default function ParkingMap({
   onReserveSpot = null,
   onToggleFault = null,
   onOpenReportModal = null,
-  className = ''
+  className = '',
+  showGrid = true
 }) {
   const mapContainerRef = useRef(null);
   const mapInstanceRef = useRef(null);
@@ -473,11 +474,12 @@ export default function ParkingMap({
       {/* ============================================================= */}
       {/* 2. SMART PARKING SYSTEM SECTION (SPATIAL GRID FOR ACTIVE HUB) */}
       {/* ============================================================= */}
-      <section 
-        ref={systemSectionRef}
-        id="smart-parking-system-section"
-        className="bg-[#0B1120] border border-slate-800 rounded-3xl p-5 md:p-8 shadow-2xl space-y-6 relative overflow-hidden animate-fade-in"
-      >
+      {showGrid && (
+        <section 
+          ref={systemSectionRef}
+          id="smart-parking-system-section"
+          className="bg-[#0B1120] border border-slate-800 rounded-3xl p-5 md:p-8 shadow-2xl space-y-6 relative overflow-hidden animate-fade-in"
+        >
         
         {/* Top Glowing Header Accent */}
         <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-cyan-500 via-teal-400 to-emerald-500" />
@@ -838,7 +840,8 @@ export default function ParkingMap({
           </div>
         )}
 
-      </section>
+        </section>
+      )}
 
     </div>
   );

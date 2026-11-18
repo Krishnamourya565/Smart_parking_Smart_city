@@ -248,6 +248,34 @@ app.post('/api/auth/register', async (req, res) => {
   }
 });
 
+// POST /api/admin/register — Administrator Sign Up / Registration
+app.post('/api/admin/register', async (req, res) => {
+  const { name, email, phone, password, department } = req.body;
+  if (!email || !name) {
+    return res.status(400).json({
+      success: false,
+      message: 'Name and email are required for administrator registration.'
+    });
+  }
+
+  const session = state.addAdminSession();
+  const adminUser = {
+    id: `ADMIN-${Date.now().toString().slice(-4)}`,
+    name,
+    email,
+    phone: phone || '',
+    role: 'admin',
+    department: department || 'Municipal Smart Mobility'
+  };
+
+  res.json({
+    success: true,
+    message: 'Admin profile created successfully.',
+    user: adminUser,
+    session
+  });
+});
+
 // POST /api/auth/logout — End user / admin session
 app.post('/api/auth/logout', (req, res) => {
   const { sessionId } = req.body;

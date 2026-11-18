@@ -553,6 +553,7 @@ export default function DriverGuidanceView({
             assignedSpotId={allottedBay}
             currentUser={currentUser}
             isAdmin={false}
+            showGrid={false}
           />
         </div>
       </div>

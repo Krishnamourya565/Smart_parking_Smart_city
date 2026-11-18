@@ -222,7 +222,7 @@ export default function ParkingGridMap({
                 <span className="text-[11px] text-slate-500">y = 1.5 units</span>
               </div>
 
-              <div className="grid grid-cols-6 sm:grid-cols-5 md:grid-cols-10 gap-1.5 sm:gap-2.5">
+              <div className="grid grid-cols-2 sm:grid-cols-5 md:grid-cols-10 gap-2.5">
                 {row1Spots.map((spot) => {
                   const styles = getSpotColorClasses(spot);
                   const isAssigned = assignedSpotId === spot.id;
@@ -230,7 +230,7 @@ export default function ParkingGridMap({
                     <button
                       key={spot.id}
                       onClick={() => handleSpotSelect(spot)}
-                      className={`relative p-2.5 rounded-xl border flex flex-col items-center justify-between aspect-square min-h-0 sm:min-h-[96px] p-1.5 sm:p-2.5 transition-all transform hover:scale-[1.03] active:scale-[0.98] ${styles.card} ${styles.glow} ${
+                      className={`relative p-2.5 rounded-xl border flex flex-col items-center justify-between min-h-[96px] transition-all transform hover:scale-[1.03] active:scale-[0.98] ${styles.card} ${styles.glow} ${
                         isAssigned ? 'ring-2 ring-white scale-[1.05] z-10' : ''
                       }`}
                     >
@@ -288,7 +288,7 @@ export default function ParkingGridMap({
                 <span className="text-[11px] text-slate-500">y = 3.5 units</span>
               </div>
 
-              <div className="grid grid-cols-6 sm:grid-cols-5 md:grid-cols-10 gap-1.5 sm:gap-2.5">
+              <div className="grid grid-cols-2 sm:grid-cols-5 md:grid-cols-10 gap-2.5">
                 {row2Spots.map((spot) => {
                   const styles = getSpotColorClasses(spot);
                   const isAssigned = assignedSpotId === spot.id;
@@ -296,7 +296,7 @@ export default function ParkingGridMap({
                     <button
                       key={spot.id}
                       onClick={() => handleSpotSelect(spot)}
-                      className={`relative p-2.5 rounded-xl border flex flex-col items-center justify-between aspect-square min-h-0 sm:min-h-[96px] p-1.5 sm:p-2.5 transition-all transform hover:scale-[1.03] active:scale-[0.98] ${styles.card} ${styles.glow} ${
+                      className={`relative p-2.5 rounded-xl border flex flex-col items-center justify-between min-h-[96px] transition-all transform hover:scale-[1.03] active:scale-[0.98] ${styles.card} ${styles.glow} ${
                         isAssigned ? 'ring-2 ring-white scale-[1.05] z-10' : ''
                       }`}
                     >
@@ -352,7 +352,7 @@ export default function ParkingGridMap({
                 <span className="text-[11px] text-slate-500">y = 5.5 units</span>
               </div>
 
-              <div className="grid grid-cols-6 sm:grid-cols-5 md:grid-cols-10 gap-1.5 sm:gap-2.5">
+              <div className="grid grid-cols-2 sm:grid-cols-5 md:grid-cols-10 gap-2.5">
                 {row3Spots.map((spot) => {
                   const styles = getSpotColorClasses(spot);
                   const isAssigned = assignedSpotId === spot.id;
@@ -360,7 +360,7 @@ export default function ParkingGridMap({
                     <button
                       key={spot.id}
                       onClick={() => handleSpotSelect(spot)}
-                      className={`relative p-2.5 rounded-xl border flex flex-col items-center justify-between aspect-square min-h-0 sm:min-h-[96px] p-1.5 sm:p-2.5 transition-all transform hover:scale-[1.03] active:scale-[0.98] ${styles.card} ${styles.glow} ${
+                      className={`relative p-2.5 rounded-xl border flex flex-col items-center justify-between min-h-[96px] transition-all transform hover:scale-[1.03] active:scale-[0.98] ${styles.card} ${styles.glow} ${
                         isAssigned ? 'ring-2 ring-white scale-[1.05] z-10' : ''
                       }`}
                     >
