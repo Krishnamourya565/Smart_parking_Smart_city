@@ -171,6 +171,17 @@ export default function LoginModal({
         role: userRole
       };
 
+      if (supabase && authUser.id && authUser.id.length === 36) {
+        try {
+          await supabase.from('user_presence').upsert({
+            user_id: authUser.id,
+            last_seen: new Date().toISOString()
+          });
+        } catch (presErr) {
+          console.warn('user_presence on login notice:', presErr);
+        }
+      }
+
       if (userRole === 'admin') {
         onAdminLogin(mergedUser, authSession);
       } else {

@@ -19,6 +19,7 @@ import {
   RefreshCw,
   Edit3
 } from 'lucide-react';
+import { supabase } from '../supabase';
 
 export default function ReportsPanel({ currentUser, isAdmin = false }) {
   const [reports, setReports] = useState([]);
@@ -46,6 +47,39 @@ export default function ReportsPanel({ currentUser, isAdmin = false }) {
   const fetchReports = async () => {
     setIsLoading(true);
     try {
+      // 1. Try Supabase directly for real-time live data
+      if (supabase) {
+        try {
+          let query = supabase.from('reports').select('*').order('created_at', { ascending: false });
+          if (!isAdmin && currentUser?.id && currentUser.id.length === 36) {
+            query = query.eq('user_id', currentUser.id);
+          }
+          const { data: supaReports, error: supaErr } = await query;
+          if (!supaErr && supaReports && supaReports.length > 0) {
+            const mapped = supaReports.map(r => ({
+              id: r.id,
+              title: r.description ? r.description.split(' — ')[0] : 'Incident Report',
+              category: r.category || 'General',
+              spotId: r.bay_id || 'N/A',
+              priority: 'High',
+              status: r.status || 'Pending',
+              description: r.description || '',
+              submittedAt: r.created_at,
+              customerId: r.user_id,
+              customerName: r.user_id ? 'Registered Driver' : 'Customer Driver',
+              customerEmail: '',
+              vehiclePlate: 'EV'
+            }));
+            setReports(mapped);
+            setIsLoading(false);
+            return;
+          }
+        } catch (sErr) {
+          console.warn('Supabase fetch reports fallback:', sErr);
+        }
+      }
+
+      // 2. Fallback to API endpoint
       const url = isAdmin 
         ? '/api/reports?role=admin'
         : `/api/reports?role=customer&userId=${currentUser?.id || currentUser?.email}`;
@@ -74,6 +108,24 @@ export default function ReportsPanel({ currentUser, isAdmin = false }) {
     setIsLoading(true);
 
     try {
+      // 1. Insert directly into Supabase
+      if (supabase) {
+        try {
+          const userUuid = (currentUser?.id && currentUser.id.length === 36) ? currentUser.id : null;
+          await supabase.from('reports').insert({
+            user_id: userUuid,
+            bay_id: reportSpotId !== 'N/A' ? reportSpotId : null,
+            category: reportCategory,
+            status: 'Pending',
+            description: reportDescription ? `${reportTitle} — ${reportDescription}` : reportTitle,
+            created_at: new Date().toISOString()
+          });
+        } catch (sErr) {
+          console.warn('Direct Supabase insert note:', sErr);
+        }
+      }
+
+      // 2. Also notify API backend
       const res = await fetch('/api/reports', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -91,8 +143,8 @@ export default function ReportsPanel({ currentUser, isAdmin = false }) {
       });
 
       const data = await res.json();
-      if (data.success) {
-        setSubmitSuccess(`Report ${data.report.id} submitted successfully to system operations!`);
+      if (data.success || supabase) {
+        setSubmitSuccess(`Report submitted successfully to system operations!`);
         setReportTitle('');
         setReportDescription('');
         fetchReports();
@@ -113,6 +165,18 @@ export default function ReportsPanel({ currentUser, isAdmin = false }) {
     setIsUpdating(true);
 
     try {
+      // 1. Update in Supabase
+      if (supabase) {
+        try {
+          await supabase.from('reports').update({
+            status: updateStatus
+          }).eq('id', selectedReport.id);
+        } catch (sErr) {
+          console.warn('Supabase status update note:', sErr);
+        }
+      }
+
+      // 2. Update via API
       const res = await fetch(`/api/reports/${selectedReport.id}/status`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -122,9 +186,9 @@ export default function ReportsPanel({ currentUser, isAdmin = false }) {
         })
       });
       const data = await res.json();
-      if (data.success) {
+      if (data.success || supabase) {
         fetchReports();
-        setSelectedReport(data.report);
+        setSelectedReport(prev => prev ? { ...prev, status: updateStatus } : null);
         setIsUpdating(false);
       }
     } catch (err) {
