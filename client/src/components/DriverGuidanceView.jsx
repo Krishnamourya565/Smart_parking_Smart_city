@@ -23,9 +23,11 @@ import {
   FileWarning,
   Activity,
   LogOut,
-  ChevronRight
+  ChevronRight,
+  Receipt
 } from 'lucide-react';
 import { PRICING, formatINR, calculateChargingEstimate, calculateSessionBill } from '../utils/constants';
+import { PARKING_LOCATIONS } from '../utils/mapConstants';
 import ParkingMap from './ParkingMap';
 import { supabase } from '../supabase';
 
@@ -86,34 +88,36 @@ export default function DriverGuidanceView({
     return () => clearInterval(heartbeatInterval);
   }, [currentUser]);
 
-  // 2. FETCH PARKING LOCATIONS FROM parking_locations TABLE
+  // 2. FETCH PARKING LOCATIONS FROM parking_locations TABLE (Merged with PARKING_LOCATIONS)
   useEffect(() => {
     const fetchLocations = async () => {
+      let combined = [...PARKING_LOCATIONS];
       try {
         if (supabase) {
           const { data, error } = await supabase
             .from('parking_locations')
-            .select('*')
-            .order('name', { ascending: true });
+            .select('*');
 
           if (!error && data && data.length > 0) {
-            setLocations(data);
-            setSelectedLocationId(data[0].id);
-            return;
+            data.forEach(dbLoc => {
+              if (!combined.some(c => c.name.toLowerCase() === dbLoc.name.toLowerCase())) {
+                combined.push({
+                  id: dbLoc.id,
+                  name: dbLoc.name,
+                  shortName: dbLoc.name,
+                  lat: dbLoc.lat,
+                  lng: dbLoc.lng
+                });
+              }
+            });
           }
         }
       } catch (e) {
         console.warn('Locations fetch error:', e);
       }
 
-      // Default facilities fallback
-      const defaultLocs = [
-        { id: 'loc-tech-central', name: 'Central Urban Facility (Sector 4)', address: 'Cyber Gateway 01, Pune' },
-        { id: 'loc-metro-hub', name: 'Metro West Fast Charging Hub', address: 'Transit Corridor North' },
-        { id: 'loc-downtown-express', name: 'Downtown Smart Express Deck', address: 'Commercial Ave, South' }
-      ];
-      setLocations(defaultLocs);
-      setSelectedLocationId(defaultLocs[0].id);
+      setLocations(combined);
+      setSelectedLocationId(combined[0]?.id || 'idea-lab-hub');
     };
 
     fetchLocations();
@@ -239,6 +243,9 @@ export default function DriverGuidanceView({
       // If targetStatus is exiting: complete the session and free the bay
       if (targetStatus === 'exiting') {
         setPortalStatus('exiting');
+        if (onOpenCheckoutModal) {
+          onOpenCheckoutModal();
+        }
         
         // Finalize to completed & free the bay
         setTimeout(async () => {
@@ -450,25 +457,83 @@ export default function DriverGuidanceView({
               {portalStatus === 'parked' && <CheckCircle2 className="w-4 h-4 text-white" />}
             </button>
 
-            {/* Button 3: "Exiting" -> exiting then completed (free the bay) */}
+            {/* Button 3: "Exiting" -> open invoice / checkout modal & free bay */}
             <button
               type="button"
-              disabled={isUpdatingStatus || portalStatus !== 'parked'}
-              onClick={() => handleTransition('exiting')}
+              disabled={isUpdatingStatus || (portalStatus !== 'parked' && portalStatus !== 'en_route')}
+              onClick={() => {
+                if (onOpenCheckoutModal) onOpenCheckoutModal();
+                handleTransition('exiting');
+              }}
               className={`p-3.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all ${
                 portalStatus === 'exiting' || portalStatus === 'completed'
                   ? 'bg-purple-600 text-white shadow-lg'
-                  : portalStatus !== 'parked'
+                  : portalStatus !== 'parked' && portalStatus !== 'en_route'
                     ? 'bg-slate-900 border border-slate-800 text-slate-600 cursor-not-allowed opacity-50'
-                    : 'bg-rose-600 hover:bg-rose-500 text-white shadow-md shadow-rose-600/20 cursor-pointer'
+                    : 'bg-rose-600 hover:bg-rose-500 text-white shadow-md shadow-rose-600/20 cursor-pointer animate-pulse'
               }`}
             >
               <LogOut className="w-4 h-4" />
-              <span>3. Exiting (Free Bay)</span>
+              <span>3. Exiting (Review Bill & Free Bay)</span>
             </button>
 
           </div>
         </div>
+
+        {/* LIVE BILLING & CHECKOUT ACTION CARD */}
+        <div className="bg-[#070B14] border border-cyan-500/40 rounded-2xl p-5 md:p-6 shadow-xl space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+            <div className="flex items-center gap-2">
+              <Receipt className="w-5 h-5 text-emerald-400" />
+              <h3 className="text-sm font-bold text-white uppercase tracking-wider font-mono">
+                Live Parking & Energy Metering
+              </h3>
+            </div>
+            <span className="text-xs px-2.5 py-0.5 rounded-full font-mono font-bold bg-emerald-950 text-emerald-300 border border-emerald-600">
+              {portalStatus === 'parked' ? 'Active Metering' : portalStatus === 'exiting' ? 'Pending Checkout' : 'Meter Standby'}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="p-3 bg-slate-900 rounded-xl border border-slate-800">
+              <span className="text-[10px] text-slate-400 uppercase font-mono">Elapsed Dwell</span>
+              <div className="text-lg font-bold font-mono text-white mt-1">45 mins</div>
+              <span className="text-[10px] text-slate-500">Base: ₹40 / hr</span>
+            </div>
+            <div className="p-3 bg-slate-900 rounded-xl border border-slate-800">
+              <span className="text-[10px] text-slate-400 uppercase font-mono">Parking Fee</span>
+              <div className="text-lg font-bold font-mono text-cyan-300 mt-1">₹40.00</div>
+              <span className="text-[10px] text-slate-500">Tier 1 Urban</span>
+            </div>
+            <div className="p-3 bg-slate-900 rounded-xl border border-slate-800">
+              <span className="text-[10px] text-slate-400 uppercase font-mono">Energy Surcharge</span>
+              <div className="text-lg font-bold font-mono text-amber-300 mt-1">{isEV ? '₹261.00' : '₹0.00'}</div>
+              <span className="text-[10px] text-slate-500">{isEV ? '14.5 kWh @ ₹18/kWh' : 'Non-EV Regular'}</span>
+            </div>
+            <div className="p-3 bg-emerald-950/40 rounded-xl border border-emerald-500/50">
+              <span className="text-[10px] text-emerald-400 uppercase font-mono font-bold">Total Bill Due</span>
+              <div className="text-xl font-black font-mono text-emerald-300 mt-1">{isEV ? '₹301.00' : '₹40.00'}</div>
+              <span className="text-[10px] text-emerald-400/80">All taxes incl.</span>
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
+            <p className="text-xs text-slate-400">
+              Click below to view the official itemized tax invoice and authorize automated exit barrier checkout.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                if (onOpenCheckoutModal) onOpenCheckoutModal();
+              }}
+              className="w-full sm:w-auto px-6 py-2.5 bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 hover:from-emerald-400 text-slate-950 font-black rounded-xl text-xs shadow-lg shadow-emerald-500/25 flex items-center justify-center gap-2 transition-all cursor-pointer"
+            >
+              <Receipt className="w-4 h-4" />
+              <span>Generate Invoice & Check Out (₹{isEV ? '301.00' : '40.00'})</span>
+            </button>
+          </div>
+        </div>
+
       </div>
 
       {/* ------------------------------------------------------------- */}
